@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Организатор · DUO CUP</title><link rel="stylesheet" href="/style.css"><script type="module" src="/control.mjs"></script>
+</head>
+<body><main class="shell control">
+  <p class="kicker">DUO CUP / УПРАВЛЕНИЕ</p><h1>Панель организатора</h1>
+  <p class="subtle"><a href="/">Сайт ↗</a> · <a href="/obs" target="_blank" rel="noopener">Оверлей OBS ↗</a></p>
+  <section><h2>Подключение</h2>
+    <label>Ключ admin из runtime/keys.json <input id="key" type="password" autocomplete="off" spellcheck="false"></label>
+    <p id="service" class="subtle">Подключаемся к локальному сервису…</p>
+  </section>
+  <section><h2>Турнир и эфир</h2>
+    <div class="control-row"><button id="event" class="button primary" disabled>Начать турнир</button><button id="round" class="button secondary" disabled>Сформировать следующий тур</button></div>
+    <form id="stream-form"><label>Канал Twitch <input id="stream" type="url" placeholder="https://www.twitch.tv/канал"></label><button class="button secondary" type="submit">Сохранить ссылку</button></form>
+  </section>
+  <section><h2>Матчи и результаты</h2>
+    <label>Выбрать матч <select id="match" disabled></select></label>
+    <div class="control-row"><button id="start" class="button secondary" disabled>Вывести матч в эфир</button><button id="pause" class="button secondary" disabled>Убрать матч из эфира</button></div>
+    <form id="result"><div class="control-row"><label><span id="first">Первая команда</span><input id="left" type="number" required min="0" max="3"></label>
+      <label><span id="second">Вторая команда</span><input id="right" type="number" required min="0" max="3"></label></div>
+      <p id="score-note" class="subtle">Укажите число выигранных карт.</p><button id="save" class="button primary" disabled>Подтвердить результат</button></form>
+    <p id="toast" class="toast" role="status"></p>
+  </section>
+</main></body></html>

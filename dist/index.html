@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101014">
+  <meta name="description" content="DUO CUP — турнир друзей по CS2 2×2. Таблица отбора, матчи, плей-офф и эфир на Twitch.">
+  <title>DUO CUP — Турнир CS2 2×2</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.mjs" type="module"></script>
+</head>
+<body>
+  <header class="top"><div class="shell bar">
+    <a class="logo" href="#top" aria-label="DUO CUP, к началу"><span class="mark" aria-hidden="true">//</span> DUO<span>CUP</span></a>
+    <nav aria-label="Разделы турнира"><a href="#qualifier">Отбор</a><a href="#matches">Матчи</a><a href="#playoff">Плей-офф</a></nav>
+    <span class="top-status" id="status"><i></i> ДО СТАРТА</span>
+  </div></header>
+  <main class="shell" id="top">
+    <section class="hero" aria-labelledby="event-title">
+      <div class="hero-copy"><p class="kicker"><span></span> COUNTER-STRIKE 2 <b> / </b> PRIVATE CUP</p>
+        <h1 id="event-title">DUO<span>CUP</span></h1>
+        <p class="date" id="date">13 ноября · ≈ 21:00 МСК</p>
+        <p class="subtle" id="event-note">В пятницу. Старт по команде организатора.</p>
+        <div class="actions"><a class="button primary" href="#qualifier">Турнирная таблица <span aria-hidden="true">↓</span></a><a id="twitch" class="button secondary" href="#broadcast">Эфир на Twitch <span aria-hidden="true">↗</span></a></div>
+      </div>
+      <div class="hero-art" aria-hidden="true"><img src="/art.svg" alt=""><span class="art-top">FIELD RECORD / 01</span><span class="art-bottom">XPLAY.GG <b>+</b> WINGMAN</span></div>
+      <div class="metrics" aria-label="Формат"><div><b>08</b><span>команд</span></div><div><b>2×2</b><span>напарники</span></div><div><b>03</b><span>победы для выхода</span></div><div><b>04</b><span>места в плей-офф</span></div></div>
+    </section>
+    <section id="broadcast" class="featured" aria-labelledby="featured-title">
+      <div><p class="kicker">TWITCH / В ЭФИРЕ</p><h2 id="featured-title">Трансляция</h2></div>
+      <div id="featured-info"><p>Эфир откроется по ссылке на Twitch.</p><p class="subtle">Организатор добавит канал перед началом.</p></div>
+      <a id="watch" class="button secondary" href="#broadcast" hidden>Открыть Twitch ↗</a>
+    </section>
+    <p id="connection" class="notice" hidden role="status">Связь с турниром потеряна. Показаны последние полученные данные.</p>
+    <section id="qualifier" class="section" aria-labelledby="qualifier-title">
+      <header class="section-title"><div><p class="kicker">01 / ОБЩАЯ ГРУППА</p><h2 id="qualifier-title">Отбор</h2></div><p>3 победы → плей-офф<br>3 поражения → выбывание</p></header>
+      <div class="table-wrap"><table><thead><tr><th scope="col">Команда</th><th scope="col" abbr="Победы">В</th><th scope="col" abbr="Поражения">П</th><th scope="col">Статус</th></tr></thead><tbody id="standings"></tbody></table></div>
+    </section>
+    <section id="matches" class="section" aria-labelledby="matches-title">
+      <header class="section-title"><div><p class="kicker">02 / РАСПИСАНИЕ</p><h2 id="matches-title">Матчи отбора</h2></div><p id="qualifier-format">BO1</p></header>
+      <div id="schedule"></div>
+    </section>
+    <section id="playoff" class="section" aria-labelledby="playoff-title">
+      <header class="section-title"><div><p class="kicker">03 / СЕТКА</p><h2 id="playoff-title">Плей-офф</h2></div><p id="playoff-format">Полуфиналы BO3 · Финал BO5</p></header>
+      <div id="bracket" class="bracket"></div>
+    </section>
+  </main>
+  <footer class="shell footer"><span class="logo"><span class="mark" aria-hidden="true">//</span> DUO<span>CUP</span></span><span>CS2 · 2×2 · XPLAY.GG</span><a href="#top">К началу ↑</a></footer>
+</body>
+</html>

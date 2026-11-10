@@ -1,0 +1,237 @@
+{
+  "name": "DUO CUP · CS2",
+  "resolution": {
+    "x": 1920,
+    "y": 1080
+  },
+  "current_scene": "01 · Ожидание и перерыв",
+  "current_program_scene": "01 · Ожидание и перерыв",
+  "scene_order": [
+    {
+      "name": "01 · Ожидание и перерыв"
+    },
+    {
+      "name": "02 · Матч CS2"
+    }
+  ],
+  "sources": [
+    {
+      "name": "CS2 · окно наблюдателя",
+      "uuid": "70adfc73-7709-48b8-9154-dc846c1108f5",
+      "id": "window_capture",
+      "versioned_id": "window_capture",
+      "settings": {
+        "window": "Counter-Strike 2:SDL_app:cs2.exe",
+        "priority": 2,
+        "method": 2,
+        "cursor": false,
+        "client_area": true,
+        "capture_audio": true
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "DUO CUP · графика матча",
+      "uuid": "b36a34ae-c904-447a-9744-4fe5c43bc196",
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "settings": {
+        "is_local_file": false,
+        "url": "http://127.0.0.1:8787/obs",
+        "width": 1920,
+        "height": 1080,
+        "shutdown": false,
+        "restart_when_active": false
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "DUO CUP · заставка",
+      "uuid": "2150561b-99ce-4549-992e-a4e09a8522d4",
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "settings": {
+        "is_local_file": false,
+        "url": "http://127.0.0.1:8787/obs?scene=standby",
+        "width": 1920,
+        "height": 1080,
+        "shutdown": false,
+        "restart_when_active": false
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "Комментатор · микрофон",
+      "uuid": "adee91d4-e761-4f78-9e54-57325d2384e3",
+      "id": "wasapi_input_capture",
+      "versioned_id": "wasapi_input_capture",
+      "settings": {
+        "device_id": "default"
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "01 · Ожидание и перерыв",
+      "uuid": "fcf10045-6581-4e1c-9068-b95e5a655b39",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "DUO CUP · заставка",
+            "source_uuid": "2150561b-99ce-4549-992e-a4e09a8522d4",
+            "id": 1,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": "OBS_BOUNDS_SCALE_INNER",
+            "bounds": {
+              "x": 1920,
+              "y": 1080
+            }
+          },
+          {
+            "name": "Комментатор · микрофон",
+            "source_uuid": "adee91d4-e761-4f78-9e54-57325d2384e3",
+            "id": 2,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": "OBS_BOUNDS_NONE",
+            "bounds": {
+              "x": 1920,
+              "y": 1080
+            }
+          }
+        ]
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "02 · Матч CS2",
+      "uuid": "68fb98e9-f393-4296-aad3-23595d0b1329",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 3,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "CS2 · окно наблюдателя",
+            "source_uuid": "70adfc73-7709-48b8-9154-dc846c1108f5",
+            "id": 1,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": "OBS_BOUNDS_SCALE_INNER",
+            "bounds": {
+              "x": 1920,
+              "y": 1080
+            }
+          },
+          {
+            "name": "DUO CUP · графика матча",
+            "source_uuid": "b36a34ae-c904-447a-9744-4fe5c43bc196",
+            "id": 2,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": "OBS_BOUNDS_SCALE_INNER",
+            "bounds": {
+              "x": 1920,
+              "y": 1080
+            }
+          },
+          {
+            "name": "Комментатор · микрофон",
+            "source_uuid": "adee91d4-e761-4f78-9e54-57325d2384e3",
+            "id": 3,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": "OBS_BOUNDS_NONE",
+            "bounds": {
+              "x": 1920,
+              "y": 1080
+            }
+          }
+        ]
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    }
+  ],
+  "groups": [],
+  "transitions": [],
+  "quick_transitions": [],
+  "transition_duration": 250
+}

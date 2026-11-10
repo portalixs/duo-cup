@@ -1,0 +1,19 @@
+{
+  "title": "DUO CUP",
+  "edition": "01",
+  "dateLabel": "13 ноября · ≈ 21:00 МСК",
+  "streamUrl": "",
+  "teams": [
+    {"id":"t1","tag":"ПМ","players":["Платон","Матвей"],"color":"#ff9b7d"},
+    {"id":"t2","tag":"АН","players":["Артемий","Никита"],"color":"#92d9f6"},
+    {"id":"t3","tag":"ЛИ","players":["Лев","Илья"],"color":"#c5afff"},
+    {"id":"t4","tag":"ДК","players":["ДимаС","Кирилл"],"color":"#ffcf81"},
+    {"id":"t5","tag":"ДГ","players":["ДимаМ","Гоша"],"color":"#a9c2ff"},
+    {"id":"t6","tag":"МС","players":["Миша","Сева"],"color":"#ace2aa"},
+    {"id":"t7","tag":"ВК","players":["Вадим","Коля"],"color":"#f5a9c2"},
+    {"id":"t8","tag":"КС","players":["Камиль","Строев"],"color":"#e0e98d"}
+  ],
+  "qualifierBestOf": 1,
+  "semifinalBestOf": 3,
+  "finalBestOf": 5
+}
