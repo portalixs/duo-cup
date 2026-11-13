@@ -3,7 +3,9 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, nextRound, resolveMatches } from './dist/model.mjs';
+import { emptyState, resolveMatches } from './dist/model.mjs';
+import { createObserverHud } from './hud-data.mjs';
+import { error, updateMatch } from './tournament-control.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const dist = join(root, 'dist');
@@ -33,7 +35,7 @@ const cfg = `"DUO CUP observer"
     "uri" "http://127.0.0.1:${port}/api/gsi"
     "timeout" "2.0"
     "buffer" "0.1"
-    "throttle" "0.5"
+    "throttle" "0.2"
     "heartbeat" "5.0"
     "auth" { "token" "${keys.gsi}" }
     "data"
@@ -41,6 +43,15 @@ const cfg = `"DUO CUP observer"
         "provider" "1"
         "map" "1"
         "round" "1"
+        "allplayers_id" "1"
+        "allplayers_state" "1"
+        "allplayers_weapons" "1"
+        "allplayers_match_stats" "1"
+        "allplayers_position" "1"
+        "player_id" "1"
+        "phase_countdowns" "1"
+        "bomb" "1"
+        "allgrenades" "1"
     }
 }
 `;
@@ -49,10 +60,12 @@ writeFileSync(join(runtime, 'gamestate_integration_duocup.cfg'), cfg, { mode: 0o
 let state = readJson(statePath, emptyState);
 let game = null;
 let lastGsi = 0;
+const observerHud = createObserverHud();
 const staleAfter = 15_000;
 const publication = readJson(join(runtime, 'publish.json'), null);
-let publishedSnapshot = '';
 let publishStatus = publication ? 'Ожидается синхронизация' : 'Публикация не настроена';
+let revision = -1;
+let completedMap = null;
 
 function commit(next) {
   const temporary = `${statePath}.tmp`;
@@ -66,16 +79,12 @@ function equalKey(value, key) {
     Buffer.byteLength(value) === key.length && timingSafeEqual(Buffer.from(value), Buffer.from(key));
 }
 
-function error(status, message) {
-  return Object.assign(new Error(message), { status });
-}
-
 async function readBody(req) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 32 * 1024) throw error(413, 'Слишком большой запрос');
+    if (size > 96 * 1024) throw error(413, 'Слишком большой запрос');
     chunks.push(chunk);
   }
   try {
@@ -98,6 +107,7 @@ function publicState() {
     game: state.active && fresh ? game : null,
     gsi: fresh,
     rounds: state.rounds,
+    broadcast: state.broadcast ?? {},
     started: state.started,
     streamUrl: state.streamUrl || event.streamUrl,
     service: true,
@@ -105,19 +115,29 @@ function publicState() {
   };
 }
 
+async function syncSite(action) {
+  const { active, gsi, game: current } = publicState();
+  const completed = completedMap;
+  const telemetry = { active, gsi, game: current && { mapId: current.mapId, ctTeam: current.ctTeam }, completed };
+  const response = await fetch(new URL('/api/bridge', publication.url), {
+    method: 'POST', headers: { Authorization: `Bearer ${publication.key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, telemetry }), signal: AbortSignal.timeout(5000), redirect: 'error',
+  });
+  const data = await response.json();
+  if (!response.ok) throw error(response.status, data.error || 'Сайт недоступен');
+  if (!data.state || !Number.isSafeInteger(data.revision)) throw new Error('Некорректный ответ сайта');
+  if (data.revision > revision) {
+    if (state.active !== data.state.active) { game = null; completedMap = null; }
+    if (JSON.stringify(state) !== JSON.stringify(data.state)) commit(data.state);
+    revision = data.revision;
+  }
+  if (completedMap === completed && (!completed || data.state.broadcast?.[completed.match]?.mapWinners?.[completed.mapId] === completed.winner)) completedMap = null;
+  publishStatus = 'Сайт синхронизирован';
+}
+
 async function publish() {
-  const { started, rounds, results, active, streamUrl } = publicState();
-  const snapshot = JSON.stringify({ started, rounds, results, active, streamUrl });
   try {
-    if (snapshot !== publishedSnapshot) {
-      const response = await fetch(new URL('/api/publish', publication.url), {
-        method: 'PUT', headers: { Authorization: `Bearer ${publication.key}`, 'Content-Type': 'application/json' },
-        body: snapshot, signal: AbortSignal.timeout(6000), redirect: 'error',
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      publishedSnapshot = snapshot;
-      publishStatus = 'Сайт синхронизирован';
-    }
+    await syncSite();
   } catch (cause) { publishStatus = `Сайт недоступен (${cause.message})`; }
   setTimeout(publish, 2500).unref();
 }
@@ -134,102 +154,72 @@ function receiveGame(payload) {
     game = null;
     return;
   }
-  const mapName = map.name.split('/').at(-1).replace(/^(de|cs|ar|dz)_/i, '').replaceAll('_', ' ');
+  const mapId = map.name.split('/').at(-1).toLowerCase();
+  const mapName = mapId.replace(/^(de|cs|ar|dz)_/i, '').replaceAll('_', ' ');
+  const match = resolveMatches(event, state).find(item => item.id === state.active);
+  const options = state.broadcast?.[state.active];
+  const hud = observerHud(payload, match, options, mapId);
+  if (map.phase === 'gameover' && ct !== t && hud.ctTeam && match?.teams.every(Boolean)) {
+    const winner = ct > t ? hud.ctTeam : match.teams.find(team => team.id !== hud.ctTeam).id;
+    if (options?.mapWinners?.[mapId] !== winner) {
+      if (publication) completedMap = { match: match.id, mapId, winner };
+      else {
+        const mapWinners = { ...options?.mapWinners, [mapId]: winner };
+        commit({ ...state, broadcast: { ...state.broadcast, [match.id]: { ...options, mapWinners } } });
+      }
+    }
+  }
   game = {
     map: mapName.charAt(0).toUpperCase() + mapName.slice(1),
-    ct, t,
-    phase: ['warmup', 'live', 'intermission', 'gameover'].includes(map.phase) ? map.phase : 'unknown',
+    mapId, ct, t,
+    ...hud,
+    phase: ['warmup', 'intermission', 'gameover'].includes(map.phase) ? map.phase : (hud.phase ?? 'live'),
+    buying: map.phase === 'live' && hud.phase === 'freezetime',
+    clockEnd: map.phase === 'gameover' ? null : hud.clockEnd,
   };
-}
-
-function updateMatch(body) {
-  if (body.action === 'event') {
-    if (!state.started) commit({ ...state, started: true, rounds: [nextRound(event, state)] });
-    return;
-  }
-  if (body.action === 'stream') {
-    const value = body.url;
-    if (typeof value !== 'string' || value.length > 500) throw error(400, 'Укажите ссылку HTTPS');
-    if (value) {
-      try { if (new URL(value).protocol !== 'https:') throw new Error(); }
-      catch { throw error(400, 'Укажите ссылку HTTPS'); }
-    }
-    commit({ ...state, streamUrl: value });
-    return;
-  }
-  if (body.action === 'pause') {
-    commit({ ...state, active: null });
-    game = null;
-    return;
-  }
-
-  if (!state.started) throw error(409, 'Сначала запустите турнир');
-  if (body.action === 'round') {
-    if (body.round !== state.rounds.length) throw error(409, 'Обновите панель перед созданием тура');
-    const matches = nextRound(event, state);
-    if (!matches.length) throw error(409, 'Нет следующего тура. Проверьте результаты текущего');
-    commit({ ...state, rounds: [...state.rounds, matches] });
-    return;
-  }
-  const matches = resolveMatches(event, state);
-  const match = matches.find(item => item.id === body.match);
-  if (!match || match.teams.some(team => !team)) throw error(409, 'Обе команды должны определиться');
-  if (body.action === 'start') {
-    if (match.winner) throw error(409, 'Матч уже завершён');
-    if (state.active === match.id) return;
-    commit({ ...state, active: match.id });
-    game = null;
-    return;
-  }
-  if (body.action !== 'result') throw error(400, 'Неизвестное действие');
-  const score = body.score;
-  const target = (match.bestOf + 1) / 2;
-  if (!Array.isArray(score) || score.length !== 2 ||
-      score.some(n => !Number.isInteger(n) || n < 0 || n > target) ||
-      Math.max(...score) !== target || score[0] === score[1]) {
-    throw error(400, `Для BO${match.bestOf} победителю нужно ${target} карт(ы)`);
-  }
-  const changedWinner = match.winner && match.winner.id !== match.teams[Number(score[1] > score[0])].id;
-  if (changedWinner && match.id.startsWith('G')) {
-    const isCurrentRound = match.id.startsWith(`G${state.rounds.length}.`);
-    const playoffStarted = matches.some(match => /^[SF]/.test(match.id) && (match.id === state.active || match.winner));
-    if (!isCurrentRound || playoffStarted) throw error(409, 'На этот результат уже опирается следующий этап');
-  }
-  if (changedWinner && matches.some(next => next.slots.includes(match.id) &&
-      (next.id === state.active || next.winner))) {
-    throw error(409, 'Победитель уже участвует в следующем матче');
-  }
-  const wasActive = state.active === match.id;
-  commit({ ...state, results: { ...state.results, [match.id]: score }, active: wasActive ? null : state.active });
-  if (wasActive) game = null;
 }
 
 const publicFiles = new Map([
   ['/', 'index.html'], ['/obs', 'obs.html'], ['/control', 'control.html'],
-  ...['index.html', 'obs.html', 'control.html', 'event.json', 'style.css', 'obs.css', 'art.svg',
+  ...['index.html', 'obs.html', 'control.html', 'event.json', 'style.css', 'obs.css', 'hud.css', 'art.svg',
     'app.mjs', 'model.mjs', 'obs.mjs', 'control.mjs'].map(file => [`/${file}`, file]),
 ]);
-const mime = { html: 'text/html', css: 'text/css', mjs: 'text/javascript', json: 'application/json', svg: 'image/svg+xml' };
+const mime = { html: 'text/html', css: 'text/css', mjs: 'text/javascript', json: 'application/json', svg: 'image/svg+xml',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
 
 async function handle(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, publicState());
+    if (req.method === 'GET' && path === '/api/hud-media') return json(res, 200, readJson(join(runtime, 'hud-media.json'), {}));
     if (req.method === 'POST' && path === '/api/gsi') {
       receiveGame(await readBody(req));
       res.writeHead(204).end();
       return;
     }
-    if (req.method === 'POST' && path === '/api/control') {
+    if (['GET', 'POST'].includes(req.method) && path === '/api/control') {
       if (!equalKey(req.headers.authorization, `Bearer ${keys.admin}`)) throw error(401, 'Неверный ключ организатора');
-      updateMatch(await readBody(req));
+      if (req.method === 'POST') {
+        const body = await readBody(req);
+        if (publication) await syncSite(body);
+        else {
+          const next = updateMatch(event, state, body, game?.mapId ?? null);
+          if (next.active !== state.active) game = null;
+          if (next !== state) commit(next);
+        }
+      }
       return json(res, 200, publicState());
     }
-    const file = req.method === 'GET' && publicFiles.get(path);
+    const hudAsset = /^\/hud\/(assets\.json|(radar\/[a-z0-9_]+\.png)|(weapons\/[a-z0-9_]+\.svg))$/.test(path);
+    const media = /^\/hud-media\/[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp)$/.test(path);
+    const file = req.method === 'GET' && (publicFiles.get(path) || (hudAsset || media ? path.slice(1) : null));
     if (!file) throw error(404, 'Страница не найдена');
-    const content = readFileSync(join(dist, file));
-    res.writeHead(200, { 'Content-Type': `${mime[file.split('.').at(-1)]}; charset=utf-8`, 'Cache-Control': 'no-cache' });
+    let content;
+    try { content = readFileSync(join(media ? runtime : dist, file)); }
+    catch (cause) { if (cause.code === 'ENOENT') throw error(404, 'Файл не найден'); throw cause; }
+    const type = mime[file.split('.').at(-1)];
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': hudAsset ? 'public, max-age=300' : 'no-cache' });
     res.end(content);
   } catch (cause) {
     if (!cause.status) console.error(cause);

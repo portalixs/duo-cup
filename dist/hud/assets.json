@@ -1,0 +1,219 @@
+{
+  "maps": {
+    "de_ancient": {
+      "name": "Ancient",
+      "x": -2953,
+      "y": 2164,
+      "scale": 5,
+      "a": [
+        0.31,
+        0.25
+      ],
+      "b": [
+        0.8,
+        0.4
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_anubis": {
+      "name": "Anubis",
+      "x": -2796,
+      "y": 3328,
+      "scale": 5.22,
+      "a": [
+        0.774,
+        0.249
+      ],
+      "b": [
+        0.325,
+        0.488
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_cache": {
+      "name": "Cache",
+      "x": -2000,
+      "y": 3250,
+      "scale": 5.5,
+      "a": [
+        0.325,
+        0.26
+      ],
+      "b": [
+        0.345,
+        0.79
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_dust2": {
+      "name": "Dust2",
+      "x": -2476,
+      "y": 3239,
+      "scale": 4.4,
+      "a": [
+        0.8,
+        0.16
+      ],
+      "b": [
+        0.21,
+        0.12
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_inferno": {
+      "name": "Inferno",
+      "x": -2087,
+      "y": 3870,
+      "scale": 4.9,
+      "a": [
+        0.81,
+        0.69
+      ],
+      "b": [
+        0.49,
+        0.22
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_mirage": {
+      "name": "Mirage",
+      "x": -3230,
+      "y": 1713,
+      "scale": 5,
+      "a": [
+        0.54,
+        0.76
+      ],
+      "b": [
+        0.23,
+        0.28
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_nuke": {
+      "name": "Nuke",
+      "x": -3453,
+      "y": 2887,
+      "scale": 7,
+      "a": [
+        0.58,
+        0.48
+      ],
+      "b": [
+        0.58,
+        0.58
+      ],
+      "lower": true,
+      "lowerMax": -495,
+      "icon": true
+    },
+    "de_overpass": {
+      "name": "Overpass",
+      "x": -4831,
+      "y": 1781,
+      "scale": 5.2,
+      "a": [
+        0.55,
+        0.23
+      ],
+      "b": [
+        0.7,
+        0.31
+      ],
+      "lower": false,
+      "lowerMax": null,
+      "icon": true
+    },
+    "de_train": {
+      "name": "Train",
+      "x": -2308,
+      "y": 2078,
+      "scale": 4.082077,
+      "a": [
+        0.63,
+        0.49
+      ],
+      "b": [
+        0.52,
+        0.76
+      ],
+      "lower": true,
+      "lowerMax": -50,
+      "icon": true
+    },
+    "de_vertigo": {
+      "name": "Vertigo",
+      "x": -3168,
+      "y": 1762,
+      "scale": 4,
+      "a": [
+        0.705,
+        0.585
+      ],
+      "b": [
+        0.222,
+        0.223
+      ],
+      "lower": true,
+      "lowerMax": 11700,
+      "icon": true
+    }
+  },
+  "weapons": [
+    "ak47",
+    "aug",
+    "awp",
+    "bizon",
+    "cz75a",
+    "deagle",
+    "elite",
+    "famas",
+    "fiveseven",
+    "g3sg1",
+    "galilar",
+    "glock",
+    "hkp2000",
+    "m249",
+    "m4a1",
+    "m4a1_silencer",
+    "mac10",
+    "mag7",
+    "mp5sd",
+    "mp7",
+    "mp9",
+    "negev",
+    "nova",
+    "p250",
+    "p90",
+    "revolver",
+    "sawedoff",
+    "scar20",
+    "sg556",
+    "ssg08",
+    "tec9",
+    "ump45",
+    "usp_silencer",
+    "xm1014",
+    "smokegrenade",
+    "flashbang",
+    "hegrenade",
+    "molotov",
+    "incgrenade",
+    "decoy",
+    "c4",
+    "knife",
+    "taser"
+  ]
+}

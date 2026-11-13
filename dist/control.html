@@ -6,21 +6,33 @@
 </head>
 <body><main class="shell control">
   <p class="kicker">DUO CUP / УПРАВЛЕНИЕ</p><h1>Панель организатора</h1>
-  <p class="subtle"><a href="/">Сайт ↗</a> · <a href="/obs" target="_blank" rel="noopener">Оверлей OBS ↗</a></p>
-  <section><h2>Подключение</h2>
-    <label>Ключ admin из runtime/keys.json <input id="key" type="password" autocomplete="off" spellcheck="false"></label>
-    <p id="service" class="subtle">Подключаемся к локальному сервису…</p>
+  <p class="subtle"><a href="/">← Сайт турнира</a><span id="overlay-link" hidden> · <a href="/obs" target="_blank" rel="noopener">Оверлей OBS ↗</a></span></p>
+  <section id="login-panel"><h2>Вход администратора</h2>
+    <form id="login" method="post">
+      <label>Ключ организатора <input id="key" type="password" autocomplete="off" spellcheck="false" required></label>
+      <p class="subtle">Используйте значение <code>admin</code> из файла <code>runtime/keys.json</code> на компьютере организатора.</p>
+      <div class="control-row"><button id="login-button" class="button primary" type="submit" disabled>Войти</button></div>
+    </form>
+    <p id="login-status" class="toast" role="status"></p>
   </section>
+  <div id="admin-panel" hidden>
+    <div class="control-row"><p id="service" class="subtle" role="status"></p><button id="logout" class="button secondary" type="button">Выйти</button></div>
   <section><h2>Турнир и эфир</h2>
     <div class="control-row"><button id="event" class="button primary" disabled>Начать турнир</button><button id="round" class="button secondary" disabled>Сформировать следующий тур</button></div>
-    <form id="stream-form"><label>Канал Twitch <input id="stream" type="url" placeholder="https://www.twitch.tv/канал"></label><button class="button secondary" type="submit">Сохранить ссылку</button></form>
+    <form id="stream-form"><label>Канал Twitch <input id="stream" type="url" placeholder="https://www.twitch.tv/канал"></label><button id="stream-save" class="button secondary" type="submit">Сохранить ссылку</button></form>
   </section>
   <section><h2>Матчи и результаты</h2>
     <label>Выбрать матч <select id="match" disabled></select></label>
     <div class="control-row"><button id="start" class="button secondary" disabled>Вывести матч в эфир</button><button id="pause" class="button secondary" disabled>Убрать матч из эфира</button></div>
+    <form id="broadcast-settings">
+      <label>Порядок карт серии <input id="broadcast-maps" type="text" placeholder="Mirage, Anubis, Dust2" maxlength="255"></label>
+      <div class="control-row"><label>Команда, которая сейчас играет за CT <select id="broadcast-ct"></select></label><button id="broadcast-save" class="button secondary" type="submit" disabled>Сохранить для эфира</button></div>
+      <p class="subtle">Сторону можно указать вручную, если игровые ники отличаются от состава.</p>
+    </form>
     <form id="result"><div class="control-row"><label><span id="first">Первая команда</span><input id="left" type="number" required min="0" max="3"></label>
       <label><span id="second">Вторая команда</span><input id="right" type="number" required min="0" max="3"></label></div>
       <p id="score-note" class="subtle">Укажите число выигранных карт.</p><button id="save" class="button primary" disabled>Подтвердить результат</button></form>
     <p id="toast" class="toast" role="status"></p>
   </section>
+  </div>
 </main></body></html>

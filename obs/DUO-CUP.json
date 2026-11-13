@@ -108,7 +108,7 @@
             "rot": 0,
             "align": 5,
             "bounds_align": 0,
-            "bounds_type": "OBS_BOUNDS_SCALE_INNER",
+            "bounds_type": 2,
             "bounds": {
               "x": 1920,
               "y": 1080
@@ -131,7 +131,7 @@
             "rot": 0,
             "align": 5,
             "bounds_align": 0,
-            "bounds_type": "OBS_BOUNDS_NONE",
+            "bounds_type": 0,
             "bounds": {
               "x": 1920,
               "y": 1080
@@ -170,7 +170,7 @@
             "rot": 0,
             "align": 5,
             "bounds_align": 0,
-            "bounds_type": "OBS_BOUNDS_SCALE_INNER",
+            "bounds_type": 2,
             "bounds": {
               "x": 1920,
               "y": 1080
@@ -193,7 +193,7 @@
             "rot": 0,
             "align": 5,
             "bounds_align": 0,
-            "bounds_type": "OBS_BOUNDS_SCALE_INNER",
+            "bounds_type": 2,
             "bounds": {
               "x": 1920,
               "y": 1080
@@ -216,7 +216,7 @@
             "rot": 0,
             "align": 5,
             "bounds_align": 0,
-            "bounds_type": "OBS_BOUNDS_NONE",
+            "bounds_type": 0,
             "bounds": {
               "x": 1920,
               "y": 1080

@@ -1,7 +1,57 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DUO CUP · OBS</title><link rel="stylesheet" href="/obs.css"><script type="module" src="/obs.mjs"></script></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DUO CUP · OBS</title>
+  <link rel="stylesheet" href="/obs.css">
+  <link rel="stylesheet" href="/hud.css">
+  <script type="module" src="/obs.mjs"></script>
+</head>
 <body>
-  <div id="match-graphic" class="match-graphic" hidden><div class="match-label"><b>DUO<span>CUP</span></b><span id="stage">CS2 / 2×2</span></div><div id="duel" class="duel" hidden><b id="team-left"></b><span>VS</span><b id="team-right"></b></div><div id="round-score" class="round-score" hidden><span id="map"></span><strong id="ct"></strong><strong id="t"></strong></div></div>
-  <div id="standby" class="standby" hidden><img src="/art.svg" alt=""><div class="standby-content"><p class="eyebrow">COUNTER-STRIKE 2 / 2×2 / XPLAY.GG</p><h1>DUO<span>CUP</span></h1><p id="standby-message">Скоро начнём</p><p id="standby-detail"></p></div><div class="standby-footer">ПРЯМОЙ ЭФИР / TWITCH</div></div>
-</body></html>
+  <main id="match-graphic" class="match-graphic" hidden>
+    <aside class="map-corner" aria-label="Радар">
+      <div id="radar" class="radar" hidden><img id="radar-img" alt=""><div id="radar-marks" class="radar-marks"></div></div>
+    </aside>
+    <header class="scoreboard" aria-label="Табло матча">
+      <div class="score-team score-team-ct"><div id="ct-emblem" class="team-emblem">CT</div><b id="team-ct">CT</b></div>
+      <div class="score-core">
+        <strong id="ct">–</strong><div class="score-timer"><span id="round-label">Ожидание</span><b id="clock">–:––</b></div><strong id="t">–</strong>
+        <div id="ct-wins" class="round-marks round-marks-ct"></div><div id="t-wins" class="round-marks round-marks-t"></div>
+      </div>
+      <div class="score-team score-team-t"><b id="team-t">T</b><div id="t-emblem" class="team-emblem">T</div></div>
+    </header>
+    <aside class="broadcast-bug broadcast-bug-top" aria-label="DUO CUP">
+      <svg class="bug-logo" viewBox="0 0 42 42" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" d="M11 5h20l6 6v20l-6 6H11l-6-6V11zm-2 8h24M9 29h24M14 9v24M28 9v24"/><path fill="currentColor" d="m17 16 4-3 4 3v10l-4 3-4-3z"/></svg>
+      <b class="bug-name">DUO CUP</b>
+    </aside>
+    <aside class="broadcast-bug broadcast-bug-left" aria-label="Xplay.gg">
+      <svg class="bug-logo" viewBox="0 0 42 42" aria-hidden="true"><path fill="#ed153c" d="M21 1 41 21 21 41 1 21z"/><path fill="none" stroke="#fff" stroke-width="2.5" d="m12 16 18-7m-20 13 22-8M11 28l22-9m-17 13 15-6"/></svg>
+      <b class="bug-name">XPLAY.GG</b>
+    </aside>
+    <section id="cards-ct" class="cards cards-ct" aria-label="Игроки CT"></section>
+    <section id="cards-t" class="cards cards-t" aria-label="Игроки T"></section>
+    <div id="observer" class="observer" hidden>
+      <div class="observer-camera"><div id="observer-art"></div><iframe id="observer-feed" title="Камера игрока" referrerpolicy="no-referrer" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin" hidden></iframe></div>
+      <div class="observer-stats"><span id="observer-hp"></span><b id="observer-name"></b><span id="observer-ammo"></span></div>
+    </div>
+  </main>
+
+  <main id="standby" class="standby" hidden>
+    <header class="standby-header">
+      <div class="wordmark"><span class="slashes" aria-hidden="true"></span>DUO<span>CUP</span></div>
+      <span class="standby-meta">COUNTER-STRIKE 2 <span>/</span> XPLAY.GG</span>
+    </header>
+    <div class="standby-body">
+      <div class="standby-content">
+        <p class="eyebrow"><span></span> ТУРНИР CS2 · 2×2</p>
+        <h1 id="standby-message">Скоро начнём</h1>
+        <p id="standby-detail" class="standby-detail"></p>
+        <div id="standby-match" class="standby-match" hidden><strong id="standby-left"></strong><span>VS</span><strong id="standby-right"></strong></div>
+      </div>
+      <img class="standby-art" src="/art.svg" alt="">
+    </div>
+    <footer class="standby-footer"><span>DUO CUP <span>/</span> ТРАНСЛЯЦИЯ</span><span class="footer-lines" aria-hidden="true"></span><span>CS2 <span>/</span> TWITCH</span></footer>
+  </main>
+</body>
+</html>

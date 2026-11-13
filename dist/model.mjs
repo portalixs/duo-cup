@@ -67,7 +67,7 @@ export async function readEvent() {
   return response.json();
 }
 
-export function watchState(render, onError = () => {}) {
+export function watchState(render, onError = () => {}, interval = 1800) {
   let previous = '';
   async function refresh() {
     try {
@@ -78,7 +78,7 @@ export function watchState(render, onError = () => {}) {
       if (signature !== previous) { render(state); previous = signature; }
       onError(false);
     } catch { previous = ''; onError(true); }
-    setTimeout(refresh, document.hidden ? 4000 : 1800);
+    setTimeout(refresh, document.hidden ? 4000 : interval);
   }
   refresh();
 }
