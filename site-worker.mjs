@@ -36,26 +36,11 @@ async function bodyOf(request) {
   } catch { throw error(400, 'Ожидается объект JSON'); }
 }
 
-function spectatorState(state) {
-  const { started, rounds, results, active, streamUrl } = state;
-  const seriesScores = currentSeriesScores(event, state);
-  return { started, rounds, results, active, streamUrl, ...(Object.keys(seriesScores).length && { seriesScores }) };
-}
-
-function adminState({ state, bridge }) {
-  const online = Date.now() - (bridge?.seen ?? 0) < 15_000;
-  const snapshot = online ? bridge.game : null;
-  const game = snapshot?.matchId && snapshot.matchId !== state.active
-    ? { ...snapshot, matchId: null, ctTeam: null } : snapshot;
-  return { ...spectatorState(state), broadcast: state.broadcast ?? {}, game, gsi: online && bridge.gsi,
-    service: online, publishStatus: online ? 'ПК наблюдателя подключён' : 'ПК наблюдателя не на связи' };
-}
-
 async function readRecord(db) {
   const row = await db.prepare('SELECT body FROM tournament_snapshot WHERE id = 1').first();
   const raw = row?.body ?? null;
   const stored = raw == null ? emptyState : JSON.parse(raw);
-  return { raw, record: stored.state ? stored : { state: spectatorState(stored), revision: 0 } };
+  return { raw, record: stored.state ? stored : { state: stored, revision: 0 } };
 }
 
 async function changeRecord(db, apply) {
@@ -84,35 +69,7 @@ function applyAction(record, body) {
 function updateBridge(record, body) {
   const next = { ...record };
   if (body.action) Object.assign(next, applyAction(record, body.action));
-  if (!body.telemetry) return next;
-
-  const data = body.telemetry;
-  const state = next.state;
-  const active = data.active === state.active ? state.active : null;
-  const match = resolveMatches(event, state).find(match => match.id === active);
-  const raw = data.game;
-  const mapId = typeof raw?.mapId === 'string' && /^[a-z0-9_]{1,64}$/.test(raw.mapId) ? raw.mapId : null;
-  const linked = Boolean(active && match && (!Object.hasOwn(raw ?? {}, 'matchId') || raw.matchId === active));
-  const ctTeam = linked && match.teams.some(team => team?.id === raw?.ctTeam) ? raw.ctTeam : null;
-  const game = mapId ? { mapId, ctTeam, matchId: linked ? active : null } : null;
-  if (game) {
-    const boundedInt = (value, max) => Number.isSafeInteger(value) && value >= 0 && value <= max ? value : null;
-    const phase = ['warmup', 'live', 'freezetime', 'over', 'intermission', 'halftime', 'paused',
-      'timeout_ct', 'timeout_t', 'bomb', 'defuse', 'gameover'].includes(raw.phase) ? raw.phase : null;
-    Object.assign(game, { ct: boundedInt(raw.ct, 1000), t: boundedInt(raw.t, 1000),
-      round: boundedInt(raw.round, 2000), phase, clockEnd: boundedInt(raw.clockEnd, Date.now() + 3_600_000) });
-  }
-  next.bridge = { seen: Date.now(), active, gsi: data.gsi === true, game };
-
-  const result = data.completed;
-  if (result?.match === active && /^[a-z0-9_]{1,64}$/.test(result?.mapId ?? '') && match?.teams.some(team => team?.id === result.winner)) {
-    const options = state.broadcast?.[active];
-    if (options?.mapWinners?.[result.mapId] !== result.winner) {
-      const mapWinners = { ...options?.mapWinners, [result.mapId]: result.winner };
-      next.state = { ...state, broadcast: { ...state.broadcast, [active]: { ...options, mapWinners } } };
-    }
-  }
-  return next;
+  return body.telemetry ? { ...next, ...observerUpdate(event, next.state, body.telemetry) } : next;
 }
 
 export default {
@@ -120,13 +77,17 @@ export default {
     const { pathname } = new URL(request.url);
     try {
       if (pathname === '/api/state' && request.method === 'GET') {
-        return json(spectatorState((await readRecord(env.DB)).record.state));
+        return json(spectatorView(event, (await readRecord(env.DB)).record.state));
       }
       if (pathname === '/api/control' && ['GET', 'POST'].includes(request.method)) {
         if (!await isAdmin(request, env)) return json({ error: 'Неверный ключ организатора' }, 401);
-        if (request.method === 'GET') return json(adminState((await readRecord(env.DB)).record));
+        if (request.method === 'GET') {
+          const { state, bridge } = (await readRecord(env.DB)).record;
+          return json(organizerView(event, state, bridge));
+        }
         const body = await bodyOf(request);
-        return json(adminState(await changeRecord(env.DB, record => applyAction(record, body))));
+        const { state, bridge } = await changeRecord(env.DB, record => applyAction(record, body));
+        return json(organizerView(event, state, bridge));
       }
       if (pathname === '/api/bridge' && ['GET', 'POST'].includes(request.method)) {
         if (!env.PUBLISH_KEY || !equalKey(request.headers.get('Authorization'), `Bearer ${env.PUBLISH_KEY}`)) return json({ error: 'Нет доступа' }, 401);

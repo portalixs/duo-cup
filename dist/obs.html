@@ -6,36 +6,55 @@
   <title>DUO CUP · OBS</title>
   <link rel="stylesheet" href="/obs.css">
   <link rel="stylesheet" href="/hud.css">
+  <link rel="stylesheet" href="/hud-results.css">
   <script type="module" src="/obs.mjs"></script>
 </head>
 <body>
   <main id="match-graphic" class="match-graphic" hidden>
     <aside class="map-corner" aria-label="Радар">
       <div id="radar" class="radar" hidden><img id="radar-img" alt=""><div id="radar-marks" class="radar-marks"></div></div>
+      <div class="broadcast-bug broadcast-bug-left" aria-label="54CS2">
+        <svg class="bug-logo" viewBox="0 0 42 42" aria-hidden="true"><path fill="#ed153c" d="M21 1 41 21 21 41 1 21z"/><path fill="none" stroke="#fff" stroke-width="2.5" d="m12 16 18-7m-20 13 22-8M11 28l22-9m-17 13 15-6"/></svg>
+        <b class="bug-name">54CS2</b>
+      </div>
     </aside>
     <header class="scoreboard" aria-label="Табло матча">
-      <div class="score-team score-team-ct"><div id="ct-emblem" class="team-emblem">CT</div><b id="team-ct">CT</b></div>
+      <div id="team-ct" class="score-team score-team-ct"><b>CT</b></div>
       <div class="score-core">
-        <strong id="ct">–</strong><div class="score-timer"><span id="round-label">Ожидание</span><b id="clock">–:––</b></div><strong id="t">–</strong>
-        <div id="ct-wins" class="round-marks round-marks-ct"></div><div id="t-wins" class="round-marks round-marks-t"></div>
+        <strong id="ct">–</strong>
+        <div class="score-timer">
+          <div class="score-caption"><span id="round-label">Ожидание</span><span id="phase-label" hidden></span></div>
+          <b id="clock">–:––</b>
+        </div>
+        <strong id="t">–</strong>
+        <div id="ct-wins" class="round-marks round-marks-ct" hidden></div><div id="t-wins" class="round-marks round-marks-t" hidden></div>
       </div>
-      <div class="score-team score-team-t"><b id="team-t">T</b><div id="t-emblem" class="team-emblem">T</div></div>
+      <div id="team-t" class="score-team score-team-t"><b>T</b></div>
     </header>
+    <div class="match-events">
+      <div id="bomb-status" class="bomb-status" hidden>
+        <span id="bomb-icon" class="bomb-icon" aria-hidden="true"></span>
+        <div class="bomb-copy"><span id="bomb-label" class="bomb-label"></span><span id="bomb-detail" class="bomb-detail" hidden></span></div>
+        <b id="bomb-time" class="bomb-time" hidden></b><span class="bomb-progress" aria-hidden="true"></span>
+      </div>
+      <div id="round-result" class="round-result" hidden>
+        <span id="round-result-label" class="round-result-label">Победа в раунде</span>
+        <b id="round-result-name" class="round-result-name"></b>
+      </div>
+    </div>
     <aside class="broadcast-bug broadcast-bug-top" aria-label="DUO CUP">
       <svg class="bug-logo" viewBox="0 0 42 42" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" d="M11 5h20l6 6v20l-6 6H11l-6-6V11zm-2 8h24M9 29h24M14 9v24M28 9v24"/><path fill="currentColor" d="m17 16 4-3 4 3v10l-4 3-4-3z"/></svg>
       <b class="bug-name">DUO CUP</b>
-    </aside>
-    <aside class="broadcast-bug broadcast-bug-left" aria-label="Xplay.gg">
-      <svg class="bug-logo" viewBox="0 0 42 42" aria-hidden="true"><path fill="#ed153c" d="M21 1 41 21 21 41 1 21z"/><path fill="none" stroke="#fff" stroke-width="2.5" d="m12 16 18-7m-20 13 22-8M11 28l22-9m-17 13 15-6"/></svg>
-      <b class="bug-name">XPLAY.GG</b>
     </aside>
     <section id="cards-ct" class="cards cards-ct" aria-label="Игроки CT"></section>
     <section id="cards-t" class="cards cards-t" aria-label="Игроки T"></section>
     <div id="observer" class="observer" hidden>
       <div class="observer-camera"><div id="observer-art"></div><iframe id="observer-feed" title="Камера игрока" referrerpolicy="no-referrer" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin" hidden></iframe></div>
       <div class="observer-stats"><span id="observer-hp"></span><b id="observer-name"></b><span id="observer-ammo"></span></div>
+      <div id="observer-match-stats" class="observer-match-stats" aria-label="Статистика наблюдаемого игрока за карту"></div>
     </div>
   </main>
+  <main id="map-results" class="map-results" aria-label="Итоги карты" hidden></main>
 
   <main id="standby" class="standby" hidden>
     <header class="standby-header">

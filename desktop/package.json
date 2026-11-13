@@ -1,0 +1,8 @@
+{
+  "name": "duo-cup-desktop-hud",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": { "start": "electron ." },
+  "dependencies": { "electron": "45.3.2", "koffi": "3.3.8" }
+}

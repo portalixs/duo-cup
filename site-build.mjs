@@ -15,6 +15,7 @@ for (const [file, type] of [['arena.webp', 'image/webp'], ['archivo-black.woff2'
 const source = readFileSync(new URL('./site-worker.mjs', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./dist/model.mjs', import.meta.url), 'utf8');
 const reducer = readFileSync(new URL('./tournament-control.mjs', import.meta.url), 'utf8').split('\n').slice(1).join('\n');
+const bridge = readFileSync(new URL('./observer-bridge.mjs', import.meta.url), 'utf8').split('\n').slice(1).join('\n');
 const dist = new URL('./dist/server/', import.meta.url);
 mkdirSync(dist, { recursive: true });
-writeFileSync(new URL('index.js', dist), `const assets = ${JSON.stringify(assets)};\n${model}\n${reducer}\n${source}`);
+writeFileSync(new URL('index.js', dist), `const assets = ${JSON.stringify(assets)};\n${model}\n${reducer}\n${bridge}\n${source}`);

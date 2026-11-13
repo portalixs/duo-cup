@@ -1,0 +1,11 @@
+.git
+.github
+.openai
+**/node_modules
+runtime
+outputs
+dist/server
+**/.env
+**/.env.*
+**/*.log
+**/*.tar.gz

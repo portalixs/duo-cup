@@ -1,0 +1,12 @@
+services:
+  site:
+    build: .
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${DUO_CUP_BIND:-127.0.0.1}:123:8787"
+    volumes:
+      - tournament-data:/app/runtime
+
+volumes:
+  tournament-data:
