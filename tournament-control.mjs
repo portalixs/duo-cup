@@ -1,10 +1,14 @@
-import { nextRound, resolveMatches } from './dist/model.mjs';
+import { emptyState, nextRound, resolveMatches } from './dist/model.mjs';
 
 export function error(status, message) {
   return Object.assign(new Error(message), { status });
 }
 
 export function updateMatch(event, state, body, mapId = null) {
+  if (body.action === 'reset') {
+    if (body.confirm !== true) throw error(400, 'Подтвердите полный сброс турнира');
+    return { ...emptyState, results: {}, rounds: [], broadcast: {} };
+  }
   if (body.action === 'event') {
     return state.started ? state : { ...state, started: true, rounds: [nextRound(event, state)] };
   }

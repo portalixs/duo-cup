@@ -209,6 +209,15 @@ function renderDetail() {
 }
 
 function render(next) {
+  if (state.started && !next.started) {
+    selectedId = '';
+    filter = 'current';
+    streamEdited = false;
+    broadcastSignature = '';
+    resultDrafts.clear();
+    broadcastDrafts.clear();
+    showMessage('toast', 'Турнир сброшен');
+  }
   state = next;
   matches = resolveMatches(event, state).filter(match => match.teams.every(Boolean));
   selectVisibleMatch();

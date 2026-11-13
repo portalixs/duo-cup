@@ -74,6 +74,7 @@ function applyAction(record, body) {
   const { state, bridge } = record;
   const mapId = Date.now() - (bridge?.seen ?? 0) < 15_000 && bridge.active === state.active ? bridge.game?.mapId : null;
   const next = updateMatch(event, state, body, mapId);
+  if (body.action === 'reset') return { ...record, state: next, bridge: undefined };
   return next === state ? record : { ...record, state: next };
 }
 
