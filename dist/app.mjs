@@ -1,9 +1,10 @@
-import { emptyState, readEvent, resolveMatches, safe, slotName, stageName, standings, watchState } from './model.mjs';
+import { emptyState, nextRound, readEvent, resolveMatches, safe, slotName, stageName, standings, watchState } from './model.mjs';
 
 const byId = id => document.getElementById(id);
 const badge = team => `<span class="badge" data-team="${safe(team.id)}">${safe(team.tag)}</span>`;
 const duo = team => team.players.map(safe).join(' / ');
 const event = await readEvent();
+const deferredPair = event.qualifierSchedule?.deferredOpeningPair;
 const rendered = new Map();
 let latestRound = 0;
 
@@ -11,6 +12,7 @@ byId('date').textContent = event.dateLabel;
 byId('team-count').textContent = event.teams.length;
 byId('qualifier-format').textContent = `BO${event.qualifierBestOf}`;
 byId('playoff-format').textContent = `Полуфиналы BO${event.semifinalBestOf} · Финал BO${event.finalBestOf}`;
+byId('qualifier-rules').hidden = event.qualifierFormat !== 'score-groups-v1';
 
 function paint(id, markup) {
   if (rendered.get(id) === markup) return;
@@ -18,11 +20,11 @@ function paint(id, markup) {
   rendered.set(id, markup);
 }
 
-function matchCard(match, state, label = '') {
+function matchCard(match, state, label = '', scheduleNote = '') {
   const active = match.id === state.active;
   return `<article class="match${active ? ' featured-match' : ''}">
-    ${label || active ? `<div class="match-meta">${label ? `<span class="match-name">${safe(label)}</span><span class="match-format">BO${match.bestOf}</span>` : ''}
-      ${active ? '<span class="chip live">В эфире</span>' : ''}</div>` : ''}
+    ${label || active || scheduleNote ? `<div class="match-meta">${label ? `<span class="match-name">${safe(label)}</span><span class="match-format">BO${match.bestOf}</span>` : ''}
+      ${scheduleNote ? `<span class="match-day">${safe(scheduleNote)}</span>` : ''}${active ? '<span class="chip live">В эфире</span>' : ''}</div>` : ''}
     ${match.teams.map((team, i) => `<div class="match-line${team && match.winner?.id === team.id ? ' winner' : ''}">
       ${team ? `<span class="team">${badge(team)}<span class="players">${duo(team)}</span></span>` : `<span>${safe(match.id === 'F1' ? `Победитель полуфинала ${i + 1}` : slotName(match.slots[i]))}</span>`}
       <b aria-label="${match.score?.[i] == null ? 'Нет счёта' : `Выиграно карт: ${match.score[i]}`}">${match.score?.[i] ?? '–'}</b></div>`).join('')}
@@ -33,23 +35,34 @@ function renderSchedule(state, matches) {
   const list = byId('schedule');
   const open = new Map([...list.querySelectorAll('details')].map(item => [Number(item.dataset.round), item.open]));
   const focusedRound = document.activeElement?.closest('#schedule summary')?.parentElement.dataset.round;
-  if (latestRound !== state.rounds.length && open.get(latestRound)) open.set(latestRound, false);
-  latestRound = state.rounds.length;
+  const planned = !state.started && !state.rounds.length && deferredPair?.length === 2;
+  const rounds = planned ? [nextRound(event, emptyState)] : state.rounds;
+  if (latestRound !== rounds.length && open.get(latestRound)) open.set(latestRound, false);
+  latestRound = rounds.length;
 
   if (!latestRound) {
     paint('schedule', '<div class="empty"><h3>Матчей пока нет</h3><p>Пары первого тура появятся после старта турнира.</p></div>');
     return;
   }
 
-  const byMatch = new Map(matches.map(match => [match.id, match]));
-  const markup = state.rounds.map((round, i) => {
+  const displayMatches = planned ? resolveMatches(event, { ...state, rounds }) : matches;
+  const byMatch = new Map(displayMatches.map(match => [match.id, match]));
+  const hasDeferred = deferredPair?.length === 2 && rounds[0]?.some(match => deferredPair.every(team => match.slots.includes(team)));
+  const noteFor = match => {
+    if (!hasDeferred || match.score || match.id === state.active || !match.id.startsWith('G1.')) return '';
+    return deferredPair.every(team => match.slots.includes(team)) ? 'Позже' : 'Первый день';
+  };
+  const markup = rounds.map((round, i) => {
     const number = i + 1;
     const completed = round.filter(match => state.results[match.id]).length;
     const inProgress = round.some(match => match.id === state.active);
-    const detail = inProgress ? '<span class="chip live">В эфире</span>' : `${completed} из ${round.length} сыграно`;
+    const detail = planned ? 'Запланирован' : inProgress ? '<span class="chip live">В эфире</span>' : `${completed} из ${round.length} сыграно`;
     return `<details class="round" data-round="${number}">
       <summary><span class="round-name">Тур ${number}</span><span class="round-progress">${detail}</span><span class="chevron" aria-hidden="true"></span></summary>
-      <div class="match-grid">${round.map(({ id }) => matchCard(byMatch.get(id), state)).join('')}</div></details>`;
+      <div class="match-grid">${round.map(({ id }) => {
+        const match = byMatch.get(id);
+        return matchCard(match, state, '', noteFor(match));
+      }).join('')}</div></details>`;
   }).reverse().join('');
   if (rendered.get('schedule') === markup) return;
   paint('schedule', markup);

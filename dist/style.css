@@ -177,6 +177,9 @@ p, h1, h2, h3 { margin: 0; }
 .round summary { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 9px 14px; border-radius: inherit; cursor: pointer; list-style: none; }
 .round summary::-webkit-details-marker { display: none; }
 .round summary:hover { background: #ffffff06; }
+.qualifier-rules { margin-top: 12px; }
+.qualifier-rules summary { justify-content: space-between; }
+.qualifier-rules ol { display: grid; gap: 8px; margin: 0; padding: 0 16px 16px 34px; color: var(--muted); font-size: .85rem; }
 .round-name { font-weight: 700; }
 .round-progress { margin-left: auto; color: var(--muted); font-size: .78rem; }
 .chevron { flex: none; width: 8px; height: 8px; border-right: 1px solid #b4bad0; border-bottom: 1px solid #b4bad0; transform: translateY(-2px) rotate(45deg); transition: transform .2s ease; }
@@ -188,6 +191,7 @@ p, h1, h2, h3 { margin: 0; }
 .match.featured-match { background: #30372c; }
 .match-meta { display: flex; align-items: center; justify-content: space-between; gap: 7px; color: var(--muted); font-size: .74rem; }
 .round .match-meta { justify-content: flex-end; }
+.match-day { margin-right: auto; }
 .match-name { color: #e2e4ee; font-size: .9rem; font-weight: 700; }
 .match-format { font-weight: 650; }
 .match-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding-block: 4px; color: #bbc0d3; font-size: .82rem; }

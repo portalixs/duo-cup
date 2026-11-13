@@ -2,8 +2,6 @@ import { emptyState, nextRound, readEvent, resolveMatches, safe, stageName } fro
 
 const el = id => document.getElementById(id);
 const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
-const statusFor = (match, active) => match.winner ? ['Завершён', 'done']
-  : match.id === active ? ['В эфире', 'live'] : ['Ожидает результата', 'waiting'];
 const matchTags = match => match.teams.map(team => team.tag).join(' — ');
 const stage = match => /^S[12]$/.test(match.id) ? `Полуфинал ${match.id.slice(1)}` : stageName(match.id);
 const mapName = id => id === 'de_dust2' ? 'Dust II' : id.replace(/^(de|cs)_/, '').split('_').filter(Boolean)
@@ -23,6 +21,23 @@ let online = false;
 let streamEdited = false;
 const resultDrafts = new Map();
 const broadcastDrafts = new Map();
+
+function openingDay(match) {
+  const deferred = event.qualifierSchedule?.deferredOpeningPair;
+  if (!match.id.startsWith('G1.') || deferred?.length !== 2) return null;
+  return deferred.every(id => match.slots.includes(id)) ? 2 : 1;
+}
+
+function matchCaption(match) {
+  const day = openingDay(match);
+  return `${stage(match)} · BO${match.bestOf}${day === 1 ? ' · День 1' : day === 2 ? ' · Сыграют позже' : ''}`;
+}
+
+function statusFor(match, active) {
+  if (match.winner) return ['Завершён', 'done'];
+  if (match.id === active) return ['В эфире', 'live'];
+  return [openingDay(match) === 2 ? 'Перенесён' : 'Ожидает результата', 'waiting'];
+}
 
 function showMessage(id, text, error = false) {
   const notice = el(id);
@@ -62,20 +77,23 @@ function renderOverview() {
   const pending = current.filter(match => !match.winner);
   const playoff = current.some(match => /^[SF]/.test(match.id));
   const completed = current.length - pending.length;
+  const waitingForDeferred = !live && pending.length === 1 && openingDay(pending[0]) === 2;
   const phase = !state.started ? 'До старта' : playoff ? 'Плей-офф' : `Отбор · Тур ${state.rounds.length}`;
   const progress = current.length ? `Подтверждено результатов: ${completed} из ${current.length}.` : '';
-  overviewMatch = live ?? pending[0] ?? null;
+  overviewMatch = live ?? pending.find(match => openingDay(match) !== 2) ?? pending[0] ?? null;
   el('overview-stage').textContent = phase;
   el('overview-title').textContent = !state.started ? 'Откройте первый тур'
     : final?.winner ? `Победили ${final.winner.players.join(' и ')}`
-      : canAdvance ? 'Можно открыть следующий тур' : live ? 'Матч выбран для эфира' : 'Матчи текущего этапа';
-  el('overview-detail').textContent = !state.started ? 'На сайте появятся пары первого тура.' : progress;
+      : canAdvance ? 'Можно открыть следующий тур' : live ? 'Матч выбран для эфира'
+        : waitingForDeferred ? 'Остался перенесённый матч' : 'Матчи текущего этапа';
+  el('overview-detail').textContent = !state.started ? 'На сайте появятся пары первого тура.'
+    : waitingForDeferred ? `${matchTags(pending[0])} сыграют позже. После подтверждения результата можно открыть второй тур.` : progress;
   el('live-summary').hidden = !live;
   el('live-summary').textContent = live ? matchTags(live) : '';
   el('event').hidden = state.started;
   el('round').hidden = !canAdvance;
   el('open-next').hidden = !state.started || canAdvance || !overviewMatch;
-  el('open-next').textContent = live ? 'Открыть матч в эфире' : 'Открыть следующий матч';
+  el('open-next').textContent = live ? 'Открыть матч в эфире' : waitingForDeferred ? 'Открыть перенесённый матч' : 'Открыть следующий матч';
   for (const id of ['event', 'round']) el(id).disabled = !online || busy;
 }
 
@@ -83,7 +101,7 @@ function matchRow(match) {
   const [status, tone] = statusFor(match, state.active);
   const score = match.score?.join(' : ') ?? '—';
   return `<button class="admin-match-option" type="button" data-match="${safe(match.id)}" aria-pressed="${match.id === selectedId}">
-    <span class="admin-match-option-meta">${safe(stage(match))} · BO${match.bestOf}</span>
+    <span class="admin-match-option-meta">${safe(matchCaption(match))}</span>
     <strong class="admin-match-option-title">${safe(matchTags(match))}</strong>
     <span class="admin-pill" data-tone="${tone}">${status}</span>
     <span class="admin-match-option-score" aria-label="${match.score ? `Счёт ${score}` : 'Счёт ещё не введён'}">${score}</span>
@@ -170,7 +188,7 @@ function renderDetail() {
   renderedMatch = match.id;
   if (changed) el('settings').open = false;
   const [status, tone] = statusFor(match, state.active);
-  el('detail-stage').textContent = `${stage(match)} · BO${match.bestOf}`;
+  el('detail-stage').textContent = matchCaption(match);
   el('detail-status').textContent = status;
   el('detail-status').dataset.tone = tone;
   setMarkup(el('detail-teams'), match.teams.map((team, index) => `<div class="admin-team">

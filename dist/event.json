@@ -14,6 +14,8 @@
     {"id":"t8","tag":"КС","players":["Камиль","Строев"],"color":"#e0e98d"}
   ],
   "qualifierBestOf": 1,
+  "qualifierFormat": "score-groups-v1",
+  "qualifierSchedule": { "deferredOpeningPair": ["t4", "t5"] },
   "semifinalBestOf": 3,
   "finalBestOf": 5
 }
