@@ -139,7 +139,8 @@ export function resolveMatches(event, state) {
     const score = state.results[match.id] ?? null;
     const winner = score && slots[Number(score[1] > score[0])];
     if (winner) winners.set(match.id, winner);
-    return { ...match, teams: slots, score, winner: winner || null };
+    const bestOf = match.id.startsWith('G') && !score ? event.qualifierBestOf : match.bestOf;
+    return { ...match, bestOf, teams: slots, score, winner: winner || null };
   });
 }
 

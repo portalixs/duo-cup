@@ -13,7 +13,7 @@
     {"id":"t7","tag":"ВК","players":["Вадим","Коля"],"color":"#f5a9c2"},
     {"id":"t8","tag":"КС","players":["Камиль","Строев"],"color":"#e0e98d"}
   ],
-  "qualifierBestOf": 1,
+  "qualifierBestOf": 3,
   "qualifierFormat": "score-groups-v1",
   "qualifierSchedule": { "deferredOpeningPair": ["t4", "t5"] },
   "semifinalBestOf": 3,

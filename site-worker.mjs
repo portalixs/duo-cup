@@ -43,7 +43,9 @@ function spectatorState(state) {
 
 function adminState({ state, bridge }) {
   const online = Date.now() - (bridge?.seen ?? 0) < 15_000;
-  const game = online && bridge.active === state.active ? bridge.game : null;
+  const snapshot = online ? bridge.game : null;
+  const game = snapshot?.matchId && snapshot.matchId !== state.active
+    ? { ...snapshot, matchId: null, ctTeam: null } : snapshot;
   return { ...spectatorState(state), broadcast: state.broadcast ?? {}, game, gsi: online && bridge.gsi,
     service: online, publishStatus: online ? 'ПК наблюдателя подключён' : 'ПК наблюдателя не на связи' };
 }
@@ -87,9 +89,18 @@ function updateBridge(record, body) {
   const state = next.state;
   const active = data.active === state.active ? state.active : null;
   const match = resolveMatches(event, state).find(match => match.id === active);
-  const mapId = /^[a-z0-9_]{1,64}$/.test(data.game?.mapId ?? '') ? data.game.mapId : null;
-  const ctTeam = match?.teams.some(team => team?.id === data.game?.ctTeam) ? data.game.ctTeam : null;
-  const game = active && mapId ? { mapId, ctTeam } : null;
+  const raw = data.game;
+  const mapId = typeof raw?.mapId === 'string' && /^[a-z0-9_]{1,64}$/.test(raw.mapId) ? raw.mapId : null;
+  const linked = Boolean(active && match && (!Object.hasOwn(raw ?? {}, 'matchId') || raw.matchId === active));
+  const ctTeam = linked && match.teams.some(team => team?.id === raw?.ctTeam) ? raw.ctTeam : null;
+  const game = mapId ? { mapId, ctTeam, matchId: linked ? active : null } : null;
+  if (game) {
+    const boundedInt = (value, max) => Number.isSafeInteger(value) && value >= 0 && value <= max ? value : null;
+    const phase = ['warmup', 'live', 'freezetime', 'over', 'intermission', 'halftime', 'paused',
+      'timeout_ct', 'timeout_t', 'bomb', 'defuse', 'gameover'].includes(raw.phase) ? raw.phase : null;
+    Object.assign(game, { ct: boundedInt(raw.ct, 1000), t: boundedInt(raw.t, 1000),
+      round: boundedInt(raw.round, 2000), phase, clockEnd: boundedInt(raw.clockEnd, Date.now() + 3_600_000) });
+  }
   next.bridge = { seen: Date.now(), active, gsi: data.gsi === true, game };
 
   const result = data.completed;

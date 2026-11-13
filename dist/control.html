@@ -61,6 +61,20 @@
         </div>
       </section>
 
+      <section class="admin-game admin-surface" aria-labelledby="game-title">
+        <header class="admin-game-head">
+          <h2 id="game-title">Данные из CS2</h2>
+          <p id="game-status" class="admin-pill"></p>
+        </header>
+        <dl id="game-summary" class="admin-game-summary" hidden>
+          <div><dt>Карта</dt><dd id="game-map"></dd></div>
+          <div><dt>Раунд</dt><dd id="game-round"></dd></div>
+          <div><dt id="game-score-label">Счёт по раундам</dt><dd id="game-score" class="admin-game-score"></dd></div>
+          <div><dt>Матч турнира</dt><dd id="game-match"></dd></div>
+        </dl>
+        <p id="game-note" class="admin-muted"></p>
+      </section>
+
       <p id="toast" class="admin-toast" role="status" hidden></p>
       <div class="admin-workspace">
         <section class="admin-queue admin-surface" aria-labelledby="matches-title">
@@ -103,8 +117,11 @@
               <details id="settings" class="admin-settings">
                 <summary>Карты и стороны</summary>
                 <form id="broadcast-settings" class="admin-form">
-                  <label class="admin-field">Карты по порядку<input id="broadcast-maps" type="text" placeholder="Mirage, Anubis, Dust2" maxlength="255" aria-describedby="maps-note"></label>
-                  <p id="maps-note" class="admin-muted"></p>
+                  <fieldset class="admin-map-fieldset" aria-describedby="maps-note">
+                    <legend>Карты серии</legend>
+                    <div id="broadcast-maps" class="admin-map-list"></div>
+                    <p id="maps-note" class="admin-muted"></p>
+                  </fieldset>
                   <label class="admin-field">Команда за CT<select id="broadcast-ct"></select></label>
                   <p id="sides-note" class="admin-muted"></p>
                   <button id="broadcast-save" class="admin-btn is-quiet" type="submit">Сохранить карты и стороны</button>

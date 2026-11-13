@@ -6,6 +6,8 @@ const matchTags = match => match.teams.map(team => team.tag).join(' — ');
 const stage = match => /^S[12]$/.test(match.id) ? `Полуфинал ${match.id.slice(1)}` : stageName(match.id);
 const mapName = id => id === 'de_dust2' ? 'Dust II' : id.replace(/^(de|cs)_/, '').split('_').filter(Boolean)
   .map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
+const mapPool = ['de_ancient', 'de_anubis', 'de_cache', 'de_dust2', 'de_inferno', 'de_mirage', 'de_nuke',
+  'de_overpass', 'de_train', 'de_vertigo'];
 
 let event;
 let session = null;
@@ -151,22 +153,40 @@ function renderResult(match, changed) {
   el('save').disabled = disabled || !complete;
 }
 
+function renderMapList(match, saved, draft) {
+  const list = el('broadcast-maps');
+  const maps = draft?.maps ?? saved?.maps ?? [];
+  const liveMap = match.id === state.active ? state.game?.mapId : null;
+  const customMaps = [liveMap, ...(saved?.maps ?? []), ...maps].filter(id => /^(de|cs)_[a-z0-9_]{1,48}$/.test(id ?? ''));
+  const catalog = new Set([...mapPool, ...customMaps]);
+
+  setMarkup(list, Array.from({ length: match.bestOf }, (_, index) =>
+    `<label class="admin-field">Карта ${index + 1}<select aria-describedby="maps-note"></select></label>`).join(''));
+  for (const [index, select] of [...list.querySelectorAll('select')].entries()) {
+    const selected = maps[index] ?? '';
+    const used = new Set(maps.filter((_, position) => position !== index));
+    setMarkup(select, '<option value="">Не выбрана</option>' + [...catalog].map(id =>
+      `<option value="${safe(id)}"${used.has(id) ? ' disabled' : ''}>${safe(mapName(id))}</option>`).join(''));
+    if (select.value !== selected) select.value = selected;
+    select.disabled = busy;
+  }
+  el('maps-note').textContent = match.bestOf === 1 ? 'Можно оставить пустым до выбора карты.' : 'Выберите карты в порядке игры.';
+}
+
 function renderBroadcast(match, changed) {
   const saved = state.broadcast?.[match.id];
   const draft = broadcastDrafts.get(match.id);
   const signature = JSON.stringify([saved?.maps, saved?.ctTeam, match.teams.map(team => team.id)]);
   if (changed || (signature !== broadcastSignature && !draft)) {
     const ctTeam = draft?.ctTeam ?? saved?.ctTeam ?? '';
-    el('broadcast-maps').value = draft?.maps ?? (saved?.maps ?? []).join(', ');
     el('broadcast-ct').replaceChildren(new Option('По игровым никам', ''),
       ...match.teams.map(team => new Option(`${team.tag} · ${team.players.join(' / ')}`, team.id)));
     el('broadcast-ct').value = ctTeam;
   }
   broadcastSignature = signature;
+  renderMapList(match, saved, draft);
   const detected = match.id === state.active && match.teams.find(team => team.id === state.game?.ctTeam);
-  el('maps-note').textContent = `До ${match.bestOf} карт через запятую.`;
   el('sides-note').textContent = detected ? `Сейчас за CT играет ${detected.tag}.` : 'Укажите команду вручную, если игровые ники отличаются от составов.';
-  el('broadcast-maps').disabled = busy;
   el('broadcast-ct').disabled = busy;
   el('broadcast-save').disabled = !online || busy;
 }
@@ -208,6 +228,51 @@ function renderDetail() {
   renderBroadcast(match, changed);
 }
 
+const gamePhases = new Map([
+  ['warmup', 'Разминка'], ['freezetime', 'Закуп'], ['live', 'Идёт раунд'], ['bomb', 'Бомба заложена'],
+  ['defuse', 'Обезвреживание'], ['over', 'Раунд завершён'], ['halftime', 'Смена сторон'],
+  ['intermission', 'Смена сторон'], ['paused', 'Пауза'], ['timeout_ct', 'Тайм-аут CT'],
+  ['timeout_t', 'Тайм-аут T'], ['gameover', 'Карта завершена'],
+]);
+
+function renderGame() {
+  const game = state.game;
+  const finished = game?.phase === 'gameover';
+  const status = el('game-status');
+  const unavailable = !online ? 'Связь с панелью потеряна'
+    : !state.service ? 'ПК наблюдателя не на связи'
+      : !state.gsi ? 'Нет данных из CS2' : '';
+  status.dataset.tone = finished ? 'done' : unavailable ? 'offline' : game ? 'live' : 'waiting';
+  status.textContent = finished ? 'Карта завершена' : unavailable || gamePhases.get(game?.phase) || (game ? 'Данные поступают' : 'Ожидаем карту');
+  el('game-summary').hidden = !game;
+
+  const note = el('game-note');
+  if (!game) {
+    note.hidden = false;
+    note.textContent = unavailable ? 'Счёт появится, когда ПК наблюдателя передаст данные текущей игры.'
+      : 'CS2 подключена. Данные появятся после входа в матч.';
+    return;
+  }
+
+  const linked = game.matchId && matches.find(match => match.id === game.matchId);
+  const ctTeam = linked && linked.teams.find(team => team.id === game.ctTeam);
+  const tTeam = ctTeam && linked.teams.find(team => team.id !== ctTeam.id);
+  const hasScore = Number.isSafeInteger(game.ct) && Number.isSafeInteger(game.t);
+  const roundsPlayed = hasScore ? game.ct + game.t : null;
+  const round = game.round ?? (hasScore && game.phase ? Math.max(1, roundsPlayed + Number(!['gameover', 'over', 'halftime', 'intermission'].includes(game.phase))) : null);
+  el('game-map').textContent = game.map || (game.mapId ? mapName(game.mapId) : '—');
+  el('game-round').textContent = round && game.phase !== 'warmup' ? round : '—';
+  el('game-score-label').textContent = finished ? 'Итог карты' : 'Счёт по раундам';
+  el('game-score').textContent = hasScore ? `${ctTeam?.tag ?? 'CT'} ${game.ct} : ${game.t} ${tTeam?.tag ?? 'T'}` : '—';
+  el('game-match').textContent = linked ? matchTags(linked) : 'Без привязки';
+
+  const pairingNote = !linked ? 'Чтобы привязать игру, выберите матч и нажмите «Вывести в эфир».'
+    : !ctTeam ? 'Стороны команд не определены. Укажите команду за CT в настройках матча.' : '';
+  const resultNote = finished && !linked?.score ? 'После завершения серии подтвердите счёт по картам в карточке матча.' : '';
+  note.textContent = unavailable ? 'Показаны последние полученные данные.' : pairingNote || resultNote;
+  note.hidden = !note.textContent;
+}
+
 function render(next) {
   if (state.started && !next.started) {
     selectedId = '';
@@ -231,6 +296,7 @@ function render(next) {
   el('stream').disabled = busy;
   el('stream-save').disabled = !online || busy;
   renderOverview();
+  renderGame();
   renderQueue();
   renderDetail();
 }
@@ -341,8 +407,12 @@ function updateScoreDraft() {
   if (match) renderResult(match, false);
 }
 
+function selectedMaps() {
+  return [...el('broadcast-maps').querySelectorAll('select')].map(select => select.value);
+}
+
 function updateBroadcastDraft() {
-  broadcastDrafts.set(selectedId, { maps: el('broadcast-maps').value, ctTeam: el('broadcast-ct').value });
+  broadcastDrafts.set(selectedId, { maps: selectedMaps(), ctTeam: el('broadcast-ct').value });
 }
 
 el('overlay-link').hidden = !local;
@@ -408,7 +478,12 @@ el('score-quick').addEventListener('click', e => {
 });
 for (const id of ['left', 'right']) el(id).addEventListener('input', updateScoreDraft);
 el('stream').addEventListener('input', () => { streamEdited = true; });
-el('broadcast-maps').addEventListener('input', updateBroadcastDraft);
+el('broadcast-maps').addEventListener('change', () => {
+  const match = matches.find(item => item.id === selectedId);
+  if (!match) return;
+  updateBroadcastDraft();
+  renderMapList(match, state.broadcast?.[selectedId], broadcastDrafts.get(selectedId));
+});
 el('broadcast-ct').addEventListener('change', updateBroadcastDraft);
 el('stream-form').addEventListener('submit', e => {
   e.preventDefault();
@@ -416,8 +491,7 @@ el('stream-form').addEventListener('submit', e => {
 });
 el('broadcast-settings').addEventListener('submit', e => {
   e.preventDefault();
-  const maps = el('broadcast-maps').value.toLowerCase().split(',').map(map => map.trim()).filter(Boolean)
-    .map(map => /^(de|cs)_/.test(map) ? map : `de_${map}`);
+  const maps = selectedMaps().filter(Boolean);
   send({ action: 'broadcast', match: selectedId, maps, ctTeam: el('broadcast-ct').value }, 'Карты и стороны сохранены.');
 });
 el('result').addEventListener('submit', e => {

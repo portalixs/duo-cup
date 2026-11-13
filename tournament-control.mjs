@@ -71,5 +71,8 @@ export function updateMatch(event, state, body, mapId = null) {
     throw error(409, 'Победитель уже участвует в следующем матче');
   }
   const wasActive = state.active === match.id;
-  return { ...state, results: { ...state.results, [match.id]: score }, active: wasActive ? null : state.active };
+  const rounds = match.id.startsWith('G') && !match.score
+    ? state.rounds.map(round => round.map(item => item.id === match.id ? { ...item, bestOf: match.bestOf } : item))
+    : state.rounds;
+  return { ...state, rounds, results: { ...state.results, [match.id]: score }, active: wasActive ? null : state.active };
 }
