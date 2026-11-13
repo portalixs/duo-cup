@@ -1,38 +1,128 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Организатор · DUO CUP</title><link rel="stylesheet" href="/style.css"><script type="module" src="/control.mjs"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101119">
+  <title>Организатор · DUO CUP</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/control.css">
+  <script type="module" src="/control.mjs"></script>
 </head>
-<body><main class="shell control">
-  <p class="kicker">DUO CUP / УПРАВЛЕНИЕ</p><h1>Панель организатора</h1>
-  <p class="subtle"><a href="/">← Сайт турнира</a><span id="overlay-link" hidden> · <a href="/obs" target="_blank" rel="noopener">Оверлей OBS ↗</a></span></p>
-  <section id="login-panel"><h2>Вход администратора</h2>
-    <form id="login" method="post">
-      <label>Ключ организатора <input id="key" type="password" autocomplete="off" spellcheck="false" required></label>
-      <p class="subtle">Используйте значение <code>admin</code> из файла <code>runtime/keys.json</code> на компьютере организатора.</p>
-      <div class="control-row"><button id="login-button" class="button primary" type="submit" disabled>Войти</button></div>
-    </form>
-    <p id="login-status" class="toast" role="status"></p>
-  </section>
-  <div id="admin-panel" hidden>
-    <div class="control-row"><p id="service" class="subtle" role="status"></p><button id="logout" class="button secondary" type="button">Выйти</button></div>
-  <section><h2>Турнир и эфир</h2>
-    <div class="control-row"><button id="event" class="button primary" disabled>Начать турнир</button><button id="round" class="button secondary" disabled>Сформировать следующий тур</button></div>
-    <form id="stream-form"><label>Канал Twitch <input id="stream" type="url" placeholder="https://www.twitch.tv/канал"></label><button id="stream-save" class="button secondary" type="submit">Сохранить ссылку</button></form>
-  </section>
-  <section><h2>Матчи и результаты</h2>
-    <label>Выбрать матч <select id="match" disabled></select></label>
-    <div class="control-row"><button id="start" class="button secondary" disabled>Вывести матч в эфир</button><button id="pause" class="button secondary" disabled>Убрать матч из эфира</button></div>
-    <form id="broadcast-settings">
-      <label>Порядок карт серии <input id="broadcast-maps" type="text" placeholder="Mirage, Anubis, Dust2" maxlength="255"></label>
-      <div class="control-row"><label>Команда, которая сейчас играет за CT <select id="broadcast-ct"></select></label><button id="broadcast-save" class="button secondary" type="submit" disabled>Сохранить для эфира</button></div>
-      <p class="subtle">Сторону можно указать вручную, если игровые ники отличаются от состава.</p>
-    </form>
-    <form id="result"><div class="control-row"><label><span id="first">Первая команда</span><input id="left" type="number" required min="0" max="3"></label>
-      <label><span id="second">Вторая команда</span><input id="right" type="number" required min="0" max="3"></label></div>
-      <p id="score-note" class="subtle">Укажите число выигранных карт.</p><button id="save" class="button primary" disabled>Подтвердить результат</button></form>
-    <p id="toast" class="toast" role="status"></p>
-  </section>
-  </div>
-</main></body></html>
+<body class="control-page">
+  <header class="admin-top">
+    <div class="admin-shell admin-bar">
+      <a class="admin-wordmark" href="/" aria-label="DUO CUP · сайт турнира"><span aria-hidden="true">//</span> DUO CUP</a>
+      <nav class="admin-nav" aria-label="Навигация организатора">
+        <a href="/">Сайт турнира <span aria-hidden="true">↗</span></a>
+        <span id="overlay-link" hidden><a href="/obs" target="_blank" rel="noopener">Оверлей OBS <span aria-hidden="true">↗</span></a></span>
+      </nav>
+      <div id="session-controls" class="admin-session" hidden>
+        <p id="service" class="admin-status admin-pill" role="status"></p>
+        <button id="logout" class="admin-btn is-quiet" type="button">Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-shell admin-main">
+    <div id="login-panel" class="admin-login-layout">
+      <div class="admin-login-copy">
+        <p class="admin-kicker">Управление турниром</p>
+        <h1>Панель организатора</h1>
+        <p class="admin-muted">Запускайте туры, выбирайте матч для эфира и подтверждайте результаты.</p>
+      </div>
+      <section class="admin-login admin-surface" aria-labelledby="login-title">
+        <h2 id="login-title">Вход</h2>
+        <form id="login" class="admin-form" method="post">
+          <label class="admin-field">Ключ организатора<input id="key" type="password" autocomplete="off" spellcheck="false" aria-describedby="key-help" required></label>
+          <p class="admin-muted" id="key-help">Значение <code>admin</code> в файле <code>runtime/keys.json</code> на компьютере организатора.</p>
+          <button id="login-button" class="admin-btn is-primary" type="submit" disabled>Войти</button>
+        </form>
+        <p id="login-status" class="admin-toast" role="status" hidden></p>
+      </section>
+    </div>
+
+    <div id="admin-panel" hidden>
+      <div class="admin-heading">
+        <h1 id="admin-title" tabindex="-1">Панель организатора</h1>
+        <a class="admin-muted" href="#stream-settings">Настройки Twitch <span aria-hidden="true">↓</span></a>
+      </div>
+      <section class="admin-overview admin-surface" aria-labelledby="overview-title">
+        <div>
+          <p id="overview-stage" class="admin-kicker"></p>
+          <h2 id="overview-title"></h2>
+          <p id="overview-detail" class="admin-muted"></p>
+        </div>
+        <div class="admin-overview-actions">
+          <p id="live-summary" class="admin-pill" data-tone="live" hidden></p>
+          <button id="event" class="admin-btn is-primary" type="button" hidden>Начать турнир</button>
+          <button id="round" class="admin-btn is-primary" type="button" hidden>Открыть следующий тур</button>
+          <button id="open-next" class="admin-btn is-primary" type="button" hidden>Открыть матч</button>
+        </div>
+      </section>
+
+      <p id="toast" class="admin-toast" role="status" hidden></p>
+      <div class="admin-workspace">
+        <section class="admin-queue admin-surface" aria-labelledby="matches-title">
+          <header class="admin-queue-head"><h2 id="matches-title">Матчи</h2><span id="match-count" class="admin-muted"></span></header>
+          <div class="admin-filters" role="group" aria-label="Фильтр матчей">
+            <button class="admin-filter" type="button" data-filter="current" aria-pressed="true">Текущие</button>
+            <button class="admin-filter" type="button" data-filter="playoff" aria-pressed="false">Плей-офф</button>
+            <button class="admin-filter" type="button" data-filter="all" aria-pressed="false">Все</button>
+          </div>
+          <div id="match-list" class="admin-match-list"></div>
+        </section>
+
+        <section id="match-detail" class="admin-detail admin-surface" aria-labelledby="detail-title">
+          <header class="admin-detail-head">
+            <div><p id="detail-stage" class="admin-kicker" hidden></p><h2 id="detail-title" tabindex="-1">Матч</h2></div>
+            <p id="detail-status" class="admin-pill" hidden></p>
+          </header>
+          <p id="detail-empty" class="admin-empty">Начните турнир, чтобы получить пары первого тура.</p>
+          <div id="detail-content" hidden>
+            <div id="detail-teams" class="admin-versus"></div>
+            <div class="admin-broadcast-bar">
+              <div><strong>Эфир</strong><p id="broadcast-note" class="admin-muted"></p></div>
+              <div class="admin-inline-actions">
+                <button id="start" class="admin-btn is-quiet" type="button">Вывести в эфир</button>
+                <button id="pause" class="admin-btn is-quiet" type="button" hidden>Убрать из эфира</button>
+              </div>
+            </div>
+            <div class="admin-detail-grid">
+              <form id="result" class="admin-form">
+                <h3>Результат</h3>
+                <p id="score-note" class="admin-muted"></p>
+                <div id="score-quick" class="admin-inline-actions" hidden></div>
+                <div class="admin-score-fields">
+                  <label class="admin-field"><span id="first">Первая команда</span><input id="left" type="number" required min="0" max="3" inputmode="numeric" aria-describedby="score-note"></label>
+                  <label class="admin-field"><span id="second">Вторая команда</span><input id="right" type="number" required min="0" max="3" inputmode="numeric" aria-describedby="score-note"></label>
+                </div>
+                <button id="save" class="admin-btn is-primary" type="submit">Подтвердить результат</button>
+              </form>
+
+              <details id="settings" class="admin-settings">
+                <summary>Карты и стороны</summary>
+                <form id="broadcast-settings" class="admin-form">
+                  <label class="admin-field">Карты по порядку<input id="broadcast-maps" type="text" placeholder="Mirage, Anubis, Dust2" maxlength="255" aria-describedby="maps-note"></label>
+                  <p id="maps-note" class="admin-muted"></p>
+                  <label class="admin-field">Команда за CT<select id="broadcast-ct"></select></label>
+                  <p id="sides-note" class="admin-muted"></p>
+                  <button id="broadcast-save" class="admin-btn is-quiet" type="submit">Сохранить карты и стороны</button>
+                </form>
+              </details>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section id="stream-settings" class="admin-stream admin-surface" aria-labelledby="stream-title">
+        <div><h2 id="stream-title">Канал Twitch</h2><p class="admin-muted">Ссылка для зрителей на сайте турнира.</p></div>
+        <form id="stream-form" class="admin-form">
+          <label class="admin-field">Ссылка на канал<input id="stream" type="url" placeholder="https://www.twitch.tv/канал" maxlength="500"></label>
+          <button id="stream-save" class="admin-btn is-quiet" type="submit">Сохранить ссылку</button>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

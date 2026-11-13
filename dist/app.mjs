@@ -1,59 +1,101 @@
-import { emptyState, readEvent, resolveMatches, safe, slotName, standings, watchState } from './model.mjs';
+import { emptyState, readEvent, resolveMatches, safe, slotName, stageName, standings, watchState } from './model.mjs';
 
 const byId = id => document.getElementById(id);
-const badge = team => `<span class="badge" style="--team:${safe(team.color)}">${safe(team.tag)}</span>`;
+const badge = team => `<span class="badge" data-team="${safe(team.id)}">${safe(team.tag)}</span>`;
+const duo = team => team.players.map(safe).join(' / ');
 const event = await readEvent();
+const rendered = new Map();
+let latestRound = 0;
+
 byId('date').textContent = event.dateLabel;
+byId('team-count').textContent = event.teams.length;
 byId('qualifier-format').textContent = `BO${event.qualifierBestOf}`;
 byId('playoff-format').textContent = `Полуфиналы BO${event.semifinalBestOf} · Финал BO${event.finalBestOf}`;
 
-function matchCard(match, state, label = match.id) {
+function paint(id, markup) {
+  if (rendered.get(id) === markup) return;
+  byId(id).innerHTML = markup;
+  rendered.set(id, markup);
+}
+
+function matchCard(match, state, label = '') {
   const active = match.id === state.active;
   return `<article class="match${active ? ' featured-match' : ''}">
-    <div class="match-meta"><span>${safe(label)} · BO${match.bestOf}</span>${active ? '<span class="chip live">В эфире</span>' : ''}</div>
+    ${label || active ? `<div class="match-meta">${label ? `<span class="match-name">${safe(label)}</span><span class="match-format">BO${match.bestOf}</span>` : ''}
+      ${active ? '<span class="chip live">В эфире</span>' : ''}</div>` : ''}
     ${match.teams.map((team, i) => `<div class="match-line${team && match.winner?.id === team.id ? ' winner' : ''}">
-      <span>${team ? badge(team) : safe(slotName(match.slots[i]))}</span><b>${match.score?.[i] ?? '–'}</b></div>`).join('')}
+      ${team ? `<span class="team">${badge(team)}<span class="players">${duo(team)}</span></span>` : `<span>${safe(match.id === 'F1' ? `Победитель полуфинала ${i + 1}` : slotName(match.slots[i]))}</span>`}
+      <b aria-label="${match.score?.[i] == null ? 'Нет счёта' : `Выиграно карт: ${match.score[i]}`}">${match.score?.[i] ?? '–'}</b></div>`).join('')}
   </article>`;
+}
+
+function renderSchedule(state, matches) {
+  const list = byId('schedule');
+  const open = new Map([...list.querySelectorAll('details')].map(item => [Number(item.dataset.round), item.open]));
+  const focusedRound = document.activeElement?.closest('#schedule summary')?.parentElement.dataset.round;
+  if (latestRound !== state.rounds.length && open.get(latestRound)) open.set(latestRound, false);
+  latestRound = state.rounds.length;
+
+  if (!latestRound) {
+    paint('schedule', '<div class="empty"><h3>Матчей пока нет</h3><p>Пары первого тура появятся после старта турнира.</p></div>');
+    return;
+  }
+
+  const byMatch = new Map(matches.map(match => [match.id, match]));
+  const markup = state.rounds.map((round, i) => {
+    const number = i + 1;
+    const completed = round.filter(match => state.results[match.id]).length;
+    const inProgress = round.some(match => match.id === state.active);
+    const detail = inProgress ? '<span class="chip live">В эфире</span>' : `${completed} из ${round.length} сыграно`;
+    return `<details class="round" data-round="${number}">
+      <summary><span class="round-name">Тур ${number}</span><span class="round-progress">${detail}</span><span class="chevron" aria-hidden="true"></span></summary>
+      <div class="match-grid">${round.map(({ id }) => matchCard(byMatch.get(id), state)).join('')}</div></details>`;
+  }).reverse().join('');
+  if (rendered.get('schedule') === markup) return;
+  paint('schedule', markup);
+  for (const item of list.querySelectorAll('details')) {
+    const number = Number(item.dataset.round);
+    item.open = open.get(number) ?? (number === latestRound);
+    if (item.dataset.round === focusedRound) item.querySelector('summary').focus({ preventScroll: true });
+  }
 }
 
 function render(state) {
   const matches = resolveMatches(event, state);
-  const active = matches.find(match => match.id === state.active);
+  const active = matches.find(match => match.id === state.active && match.teams.every(Boolean));
   const semis = matches.filter(match => match.id.startsWith('S'));
   const final = matches.find(match => match.id === 'F1');
   const teamStatus = row => row.wins >= 3 ? ['pass', 'Плей-офф'] : row.losses >= 3 ? ['out', 'Выбыла'] : ['', state.started ? 'В игре' : 'Ожидает'];
-  byId('standings').innerHTML = standings(event, state).map(row => {
+  paint('standings', standings(event, state).map(row => {
     const [color, label] = teamStatus(row);
-    return `<tr><td><div class="team">${badge(row)}<span class="players">${row.players.map(safe).join(' / ')}</span></div></td>
+    return `<tr><th scope="row"><span class="team">${badge(row)}<span class="players">${duo(row)}</span></span></th>
       <td>${row.wins}</td><td>${row.losses}</td><td><span class="chip ${color}">${label}</span></td></tr>`;
-  }).join('');
+  }).join(''));
 
-  byId('schedule').innerHTML = state.rounds.length ? state.rounds.map((round, i) => {
-    const cards = round.map(({ id }) => matchCard(matches.find(match => match.id === id), state));
-    return `<div class="round"><h3>Тур ${i + 1}</h3><div class="match-grid">${cards.join('')}</div></div>`;
-  }).join('') : '<p class="empty">Пары первого тура появятся после старта турнира.</p>';
-  byId('bracket').innerHTML = `<div class="semis">${semis.map((match, i) => matchCard(match, state, `Полуфинал ${i + 1}`)).join('')}</div>
-    <div class="bracket-line" aria-hidden="true"></div><div>${matchCard(final, state, 'Финал')}
-    ${final.winner ? `<p class="champion">Чемпионы · ${final.winner.players.map(safe).join(' и ')}</p>` : ''}</div>`;
+  renderSchedule(state, matches);
+  paint('bracket', `<div class="semis">${semis.map((match, i) => matchCard(match, state, `Полуфинал ${i + 1}`)).join('')}</div>
+    <div class="bracket-line" aria-hidden="true"></div><div class="final">${matchCard(final, state, 'Финал')}
+    ${final.winner ? `<p class="champion">Чемпионы · ${final.winner.players.map(safe).join(' и ')}</p>` : ''}</div>`);
 
-  const status = byId('status');
-  status.classList.toggle('live', state.started && !final.winner);
-  status.innerHTML = `<i></i> ${final.winner ? 'ЗАВЕРШЁН' : state.started ? 'ИДЁТ ТУРНИР' : 'ДО СТАРТА'}`;
-  byId('event-note').textContent = final.winner ? 'Турнир завершён.' : state.started ? 'Турнир начался.' : 'В пятницу. Старт по команде организатора.';
+  byId('status').classList.toggle('live', state.started && !final.winner);
+  paint('status', `<i></i><span>${final.winner ? 'Завершён' : state.started ? 'Идёт турнир' : 'До старта'}</span>`);
+  byId('event-note').textContent = final.winner ? `Чемпионы · ${final.winner.players.join(' и ')}`
+    : state.started ? (semis.every(match => match.teams.every(Boolean)) ? 'Идёт плей-офф' : 'Идёт отбор') : 'Старт по команде организатора.';
 
   const stream = state.streamUrl || event.streamUrl;
-  const twitch = byId('twitch');
   const watch = byId('watch');
   watch.hidden = !stream;
-  for (const link of [twitch, watch]) {
+  byId('twitch-label').textContent = stream ? 'Twitch' : 'Трансляция';
+  byId('twitch-arrow').textContent = stream ? '↗' : '↓';
+  for (const link of [byId('twitch'), watch]) {
     link.href = stream || '#broadcast';
     link.target = stream ? '_blank' : '_self';
     link.rel = 'noopener noreferrer';
   }
-  byId('featured-info').innerHTML = active
-    ? `<p><strong>${active.teams.map(team => safe(team.tag)).join(' <span class="subtle">vs</span> ')}</strong></p><p class="subtle">Матч в эфире · BO${active.bestOf}</p>`
-    : `<p>${stream ? 'Турнирный эфир на Twitch' : 'Эфир откроется по ссылке на Twitch.'}</p>
-      <p class="subtle">${stream ? 'Текущий матч появится после выбора организатором.' : 'Организатор добавит канал перед началом.'}</p>`;
+  byId('broadcast').classList.toggle('has-match', Boolean(active));
+  paint('featured-info', active
+    ? `<p class="broadcast-match"><strong>${duo(active.teams[0])}</strong><span>vs</span><strong>${duo(active.teams[1])}</strong></p><p class="subtle">${safe(stageName(active.id))} · BO${active.bestOf}${stream ? '' : ' · Ссылка на Twitch ещё не добавлена'}</p>`
+    : `<p>${stream ? 'Эфир турнира на Twitch' : 'Ссылка на эфир появится перед началом.'}</p>`);
 }
 
 render(emptyState);

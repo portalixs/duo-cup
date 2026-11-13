@@ -123,8 +123,11 @@ export default {
       }
       const asset = request.method === 'GET' && Object.hasOwn(assets, pathname) && assets[pathname];
       if (!asset) return new Response('Страница не найдена', { status: 404 });
-      return new Response(asset[1], { headers: {
-        'Content-Type': `${asset[0]}; charset=utf-8`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff',
+      const [type, content, binary] = asset;
+      const body = binary ? Uint8Array.from(atob(content), char => char.charCodeAt(0)) : content;
+      return new Response(body, { headers: {
+        'Content-Type': binary ? type : `${type}; charset=utf-8`, 'Cache-Control': binary ? 'public, max-age=3600' : 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
       } });
     } catch (cause) {
