@@ -1,4 +1,4 @@
-import { emptyState, nextRound, readEvent, resolveMatches, safe, slotName, stageName, standings, watchState } from './model.mjs';
+import { emptyState, nextRound, readEvent, recordedSeriesScore, resolveMatches, safe, slotName, stageName, standings, watchState } from './model.mjs';
 
 const byId = id => document.getElementById(id);
 const badge = team => `<span class="badge" data-team="${safe(team.id)}">${safe(team.tag)}</span>`;
@@ -20,14 +20,21 @@ function paint(id, markup) {
   rendered.set(id, markup);
 }
 
+function publicMatchScore(match, state) {
+  const options = state.broadcast?.[match.id];
+  return match.score ?? state.seriesScores?.[match.id] ??
+    (options?.mapResults?.length ? recordedSeriesScore(match, options) : null);
+}
+
 function matchCard(match, state, label = '', scheduleNote = '') {
   const active = match.id === state.active;
+  const score = publicMatchScore(match, state);
   return `<article class="match${active ? ' featured-match' : ''}">
     ${label || active || scheduleNote ? `<div class="match-meta">${label ? `<span class="match-name">${safe(label)}</span><span class="match-format">BO${match.bestOf}</span>` : ''}
       ${scheduleNote ? `<span class="match-day">${safe(scheduleNote)}</span>` : ''}${active ? '<span class="chip live">В эфире</span>' : ''}</div>` : ''}
     ${match.teams.map((team, i) => `<div class="match-line${team && match.winner?.id === team.id ? ' winner' : ''}">
       ${team ? `<span class="team">${badge(team)}<span class="players">${duo(team)}</span></span>` : `<span>${safe(match.id === 'F1' ? `Победитель полуфинала ${i + 1}` : slotName(match.slots[i]))}</span>`}
-      <b aria-label="${match.score?.[i] == null ? 'Нет счёта' : `Выиграно карт: ${match.score[i]}`}">${match.score?.[i] ?? '–'}</b></div>`).join('')}
+      <b aria-label="${score?.[i] == null ? 'Нет счёта' : `Выиграно карт: ${score[i]}`}">${score?.[i] ?? '–'}</b></div>`).join('')}
   </article>`;
 }
 
@@ -106,8 +113,9 @@ function render(state) {
     link.rel = 'noopener noreferrer';
   }
   byId('broadcast').classList.toggle('has-match', Boolean(active));
+  const activeScore = active && publicMatchScore(active, state);
   paint('featured-info', active
-    ? `<p class="broadcast-match"><strong>${duo(active.teams[0])}</strong><span>vs</span><strong>${duo(active.teams[1])}</strong></p><p class="subtle">${safe(stageName(active.id))} · BO${active.bestOf}${stream ? '' : ' · Ссылка на Twitch ещё не добавлена'}</p>`
+    ? `<p class="broadcast-match"><strong>${duo(active.teams[0])}</strong>${activeScore ? `<b aria-label="Счёт по картам">${activeScore.join(':')}</b>` : '<span>vs</span>'}<strong>${duo(active.teams[1])}</strong></p><p class="subtle">${safe(stageName(active.id))} · BO${active.bestOf}${stream ? '' : ' · Ссылка на Twitch ещё не добавлена'}</p>`
     : `<p>${stream ? 'Эфир турнира на Twitch' : 'Ссылка на эфир появится перед началом.'}</p>`);
 }
 

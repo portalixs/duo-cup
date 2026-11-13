@@ -156,6 +156,7 @@
 .admin-team { display: flex; gap: 12px; align-items: center; min-width: 0; }
 .admin-team:last-child { flex-direction: row-reverse; text-align: right; }
 .admin-team > div { min-width: 0; }
+.admin-team > span:last-child { overflow-wrap: anywhere; }
 .admin-team :is(b, strong, small) { display: block; overflow-wrap: anywhere; }
 .admin-team-mark {
   display: grid;
@@ -168,7 +169,18 @@
   color: var(--team, var(--desk-ink));
   font-weight: 700;
 }
-.admin-vs { color: var(--desk-muted); text-align: center; font-size: 15px; font-weight: 650; white-space: nowrap; }
+.admin-series-score { display: grid; justify-items: center; color: var(--desk-muted); font-size: 13px; white-space: nowrap; }
+.admin-series-score strong { color: var(--desk-ink); font-size: clamp(24px, 4.5vw, 40px); font-weight: 700; line-height: 1; }
+.admin-series { display: grid; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 12px; background: #d6fb840c; }
+.admin-series-map { color: var(--desk-ink); font-weight: 600; }
+.admin-series .admin-muted { font-size: 13px; }
+.admin-map-winner-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.admin-map-winner-buttons .admin-btn { min-height: 44px; padding-inline: 8px; }
+#map-undo { justify-self: start; }
+.admin-series-maps { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.admin-series-maps li { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px; background: var(--desk-field); color: var(--desk-muted); font-size: 13px; }
+.admin-series-maps li[aria-current] { background: #d6fb8418; color: var(--desk-accent); }
+.admin-series-maps strong { color: var(--desk-ink); }
 .admin-broadcast-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; border-bottom: 1px solid var(--desk-line); }
 .admin-broadcast-bar p { margin-top: 4px; font-size: 13px; }
 .admin-inline-actions { flex: none; justify-content: end; }
@@ -194,9 +206,6 @@
 .admin-field :is(input, select):disabled { opacity: .6; }
 .admin-score-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .admin-score-fields input { font-size: 18px; }
-#score-quick { gap: 8px; }
-#score-quick .admin-btn { min-height: 36px; padding-inline: 8px; }
-#score-quick .admin-btn[aria-pressed='true'] { color: var(--desk-accent); background: #d6fb8415; }
 .admin-settings { padding: 12px; border-radius: 8px; background: var(--desk-field); }
 .admin-settings summary { cursor: pointer; font-weight: 600; }
 .admin-settings[open] summary { margin-bottom: 12px; }
@@ -208,6 +217,11 @@
 .admin-stream { display: grid; grid-template-columns: minmax(200px, .72fr) minmax(0, 1fr); align-items: center; gap: 24px; margin-top: 20px; scroll-margin-top: 88px; }
 .admin-stream h2 { margin-bottom: 4px; }
 .admin-stream .admin-form { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.admin-danger { margin-top: 12px; background: transparent; color: #ffad9f; }
+.admin-danger:hover { background: #ff8e7616; }
+.admin-reset { margin-top: 20px; padding: 12px 16px; color: var(--desk-muted); }
+.admin-reset summary { cursor: pointer; }
+.admin-reset p { margin-top: 8px; }
 .admin-empty { padding: 16px 0; color: var(--desk-muted); font-size: 14px; }
 .admin-toast { padding: 12px 16px; border-radius: 8px; background: #d6fb8410; color: #d9f1ae; font-size: 14px; }
 #toast:not([hidden]) { margin-bottom: 16px; }
@@ -236,6 +250,7 @@
   .admin-overview { align-items: start; flex-direction: column; gap: 16px; }
   .admin-match-list { max-height: 284px; }
   .admin-detail { scroll-margin-top: 116px; }
+  .admin-workspace.has-selected-match .admin-detail { order: -1; }
 }
 @media (max-width: 400px) {
   .admin-detail-grid, .admin-stream .admin-form { grid-template-columns: minmax(0, 1fr); }

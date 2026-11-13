@@ -95,25 +95,21 @@
           <p id="detail-empty" class="admin-empty">Начните турнир, чтобы получить пары первого тура.</p>
           <div id="detail-content" hidden>
             <div id="detail-teams" class="admin-versus"></div>
+            <section id="map-result" class="admin-series" aria-labelledby="map-result-title" hidden>
+              <h3 id="map-result-title">Победитель карты</h3>
+              <p id="current-map" class="admin-series-map"></p>
+              <p id="map-result-note" class="admin-muted" hidden></p>
+              <div id="map-winner-buttons" class="admin-map-winner-buttons"></div>
+              <button id="map-undo" class="admin-btn is-quiet" type="button" hidden>Отменить итог последней карты</button>
+            </section>
+            <ol id="series-maps" class="admin-series-maps" aria-label="Карты серии" hidden></ol>
             <div class="admin-broadcast-bar">
               <div><strong>Эфир</strong><p id="broadcast-note" class="admin-muted"></p></div>
               <div class="admin-inline-actions">
-                <button id="start" class="admin-btn is-quiet" type="button">Вывести в эфир</button>
                 <button id="pause" class="admin-btn is-quiet" type="button" hidden>Убрать из эфира</button>
               </div>
             </div>
             <div class="admin-detail-grid">
-              <form id="result" class="admin-form">
-                <h3>Результат</h3>
-                <p id="score-note" class="admin-muted"></p>
-                <div id="score-quick" class="admin-inline-actions" hidden></div>
-                <div class="admin-score-fields">
-                  <label class="admin-field"><span id="first">Первая команда</span><input id="left" type="number" required min="0" max="3" inputmode="numeric" aria-describedby="score-note"></label>
-                  <label class="admin-field"><span id="second">Вторая команда</span><input id="right" type="number" required min="0" max="3" inputmode="numeric" aria-describedby="score-note"></label>
-                </div>
-                <button id="save" class="admin-btn is-primary" type="submit">Подтвердить результат</button>
-              </form>
-
               <details id="settings" class="admin-settings">
                 <summary>Карты и стороны</summary>
                 <form id="broadcast-settings" class="admin-form">
@@ -124,10 +120,23 @@
                   </fieldset>
                   <label class="admin-field">Команда за CT<select id="broadcast-ct"></select></label>
                   <p id="sides-note" class="admin-muted"></p>
+                  <button id="start" class="admin-btn is-primary" type="submit">Вывести в эфир</button>
                   <button id="broadcast-save" class="admin-btn is-quiet" type="submit">Сохранить карты и стороны</button>
                 </form>
               </details>
+              <details id="manual-result" class="admin-settings">
+                <summary id="manual-result-title">Ввести итог вручную</summary>
+                <form id="result" class="admin-form">
+                  <p id="score-note" class="admin-muted"></p>
+                  <div class="admin-score-fields">
+                    <label class="admin-field"><span id="first">Первая команда</span><input id="left" type="number" required min="0" max="3" inputmode="numeric" aria-describedby="score-note"></label>
+                    <label class="admin-field"><span id="second">Вторая команда</span><input id="right" type="number" required min="0" max="3" inputmode="numeric" aria-describedby="score-note"></label>
+                  </div>
+                  <button id="save" class="admin-btn is-quiet" type="submit">Сохранить итог</button>
+                </form>
+              </details>
             </div>
+            <button id="match-reset" class="admin-btn admin-danger" type="button" hidden>Сбросить матч</button>
           </div>
         </section>
       </div>
@@ -139,6 +148,11 @@
           <button id="stream-save" class="admin-btn is-quiet" type="submit">Сохранить ссылку</button>
         </form>
       </section>
+      <details class="admin-reset">
+        <summary>Сброс турнира</summary>
+        <p class="admin-muted">Удаляет результаты, туры и настройки эфира.</p>
+        <button id="tournament-reset" class="admin-btn admin-danger" type="button">Сбросить весь турнир</button>
+      </details>
     </div>
   </main>
 </body>

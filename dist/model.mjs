@@ -144,6 +144,23 @@ export function resolveMatches(event, state) {
   });
 }
 
+export function recordedSeriesScore(match, options) {
+  return match.score ?? match.teams.map(team =>
+    (options?.mapResults ?? []).filter(result => result.winner === team?.id).length);
+}
+
+export function currentSeriesScores(event, state) {
+  if (!Object.values(state.broadcast ?? {}).some(options => options.mapResults?.length)) return {};
+  const scores = {};
+  for (const match of resolveMatches(event, state)) {
+    const options = state.broadcast?.[match.id];
+    if (!match.score && match.teams.every(Boolean) && options?.mapResults?.length) {
+      scores[match.id] = recordedSeriesScore(match, options);
+    }
+  }
+  return scores;
+}
+
 export async function readEvent() {
   const response = await fetch('/event.json');
   if (!response.ok) throw new Error('Данные турнира недоступны');

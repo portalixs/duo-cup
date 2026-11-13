@@ -38,7 +38,8 @@ async function bodyOf(request) {
 
 function spectatorState(state) {
   const { started, rounds, results, active, streamUrl } = state;
-  return { started, rounds, results, active, streamUrl };
+  const seriesScores = currentSeriesScores(event, state);
+  return { started, rounds, results, active, streamUrl, ...(Object.keys(seriesScores).length && { seriesScores }) };
 }
 
 function adminState({ state, bridge }) {

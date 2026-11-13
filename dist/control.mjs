@@ -1,4 +1,4 @@
-import { emptyState, nextRound, readEvent, resolveMatches, safe, stageName } from './model.mjs';
+import { emptyState, nextRound, readEvent, recordedSeriesScore, resolveMatches, safe, stageName } from './model.mjs';
 
 const el = id => document.getElementById(id);
 const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
@@ -23,6 +23,20 @@ let online = false;
 let streamEdited = false;
 const resultDrafts = new Map();
 const broadcastDrafts = new Map();
+
+function seriesScore(match) {
+  return recordedSeriesScore(match, state.broadcast?.[match.id]);
+}
+
+function clearMatchDrafts() {
+  selectedId = '';
+  filter = 'current';
+  renderedMatch = null;
+  broadcastSignature = '';
+  resultDrafts.clear();
+  broadcastDrafts.clear();
+  el('manual-result').open = false;
+}
 
 function openingDay(match) {
   const deferred = event.qualifierSchedule?.deferredOpeningPair;
@@ -91,7 +105,7 @@ function renderOverview() {
   el('overview-detail').textContent = !state.started ? 'На сайте появятся пары первого тура.'
     : waitingForDeferred ? `${matchTags(pending[0])} сыграют позже. После подтверждения результата можно открыть второй тур.` : progress;
   el('live-summary').hidden = !live;
-  el('live-summary').textContent = live ? matchTags(live) : '';
+  el('live-summary').textContent = live ? `${matchTags(live)} · ${seriesScore(live).join(' : ')}` : '';
   el('event').hidden = state.started;
   el('round').hidden = !canAdvance;
   el('open-next').hidden = !state.started || canAdvance || !overviewMatch;
@@ -101,12 +115,13 @@ function renderOverview() {
 
 function matchRow(match) {
   const [status, tone] = statusFor(match, state.active);
-  const score = match.score?.join(' : ') ?? '—';
+  const showScore = match.score || match.id === state.active || state.broadcast?.[match.id]?.mapResults?.length;
+  const score = showScore ? seriesScore(match).join(' : ') : '—';
   return `<button class="admin-match-option" type="button" data-match="${safe(match.id)}" aria-pressed="${match.id === selectedId}">
     <span class="admin-match-option-meta">${safe(matchCaption(match))}</span>
     <strong class="admin-match-option-title">${safe(matchTags(match))}</strong>
     <span class="admin-pill" data-tone="${tone}">${status}</span>
-    <span class="admin-match-option-score" aria-label="${match.score ? `Счёт ${score}` : 'Счёт ещё не введён'}">${score}</span>
+    <span class="admin-match-option-score" aria-label="${showScore ? `Счёт ${score}` : 'Счёт ещё не введён'}">${score}</span>
   </button>`;
 }
 
@@ -129,18 +144,13 @@ function renderQueue() {
 function renderResult(match, changed) {
   const target = (match.bestOf + 1) / 2;
   const saved = state.broadcast?.[match.id];
-  const mapWins = Object.values(saved?.mapWinners ?? {});
-  const automatic = match.teams.map(team => mapWins.filter(id => id === team.id).length);
-  const score = resultDrafts.get(match.id) ?? match.score ?? (mapWins.length ? automatic : ['', '']);
+  const score = resultDrafts.get(match.id) ?? match.score ?? (saved?.mapResults?.length ? seriesScore(match) : ['', '']);
   const name = match.teams.map(team => team.tag);
   const disabled = !online || busy;
   el('first').textContent = name[0];
   el('second').textContent = name[1];
-  el('score-note').textContent = match.bestOf === 1 ? 'Укажите победителя карты.'
-    : `Введите счёт по картам. Для победы нужно ${target}.`;
-  el('score-quick').hidden = match.bestOf !== 1 || Boolean(match.score);
-  setMarkup(el('score-quick'), name.map((tag, index) => `<button class="admin-btn is-quiet" type="button" data-winner="${index}" aria-pressed="${score[index] !== '' && Number(score[index]) === 1}">Победа ${safe(tag)}</button>`).join(''));
-  for (const button of el('score-quick').querySelectorAll('button')) button.disabled = disabled;
+  el('manual-result-title').textContent = match.score ? 'Исправить итог серии' : 'Ввести итог серии вручную';
+  el('score-note').textContent = `Укажите итоговый счёт по картам. Победителю нужно ${target}.`;
   for (const [i, id] of ['left', 'right'].entries()) {
     const input = el(id);
     input.max = target;
@@ -149,7 +159,7 @@ function renderResult(match, changed) {
   }
   const complete = score.every(value => value !== '' && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= target)
     && Math.max(...score.map(Number)) === target && Number(score[0]) !== Number(score[1]);
-  el('save').textContent = match.score ? 'Сохранить исправление' : 'Подтвердить результат';
+  el('save').textContent = 'Сохранить итог';
   el('save').disabled = disabled || !complete;
 }
 
@@ -168,9 +178,9 @@ function renderMapList(match, saved, draft) {
     setMarkup(select, '<option value="">Не выбрана</option>' + [...catalog].map(id =>
       `<option value="${safe(id)}"${used.has(id) ? ' disabled' : ''}>${safe(mapName(id))}</option>`).join(''));
     if (select.value !== selected) select.value = selected;
-    select.disabled = busy;
+    select.disabled = busy || index < (saved?.mapResults?.length ?? 0);
   }
-  el('maps-note').textContent = match.bestOf === 1 ? 'Можно оставить пустым до выбора карты.' : 'Выберите карты в порядке игры.';
+  el('maps-note').textContent = 'Выберите карты в порядке игры.';
 }
 
 function renderBroadcast(match, changed) {
@@ -179,20 +189,52 @@ function renderBroadcast(match, changed) {
   const signature = JSON.stringify([saved?.maps, saved?.ctTeam, match.teams.map(team => team.id)]);
   if (changed || (signature !== broadcastSignature && !draft)) {
     const ctTeam = draft?.ctTeam ?? saved?.ctTeam ?? '';
-    el('broadcast-ct').replaceChildren(new Option('По игровым никам', ''),
+    el('broadcast-ct').replaceChildren(new Option('Выберите команду', ''),
       ...match.teams.map(team => new Option(`${team.tag} · ${team.players.join(' / ')}`, team.id)));
     el('broadcast-ct').value = ctTeam;
   }
   broadcastSignature = signature;
   renderMapList(match, saved, draft);
   const detected = match.id === state.active && match.teams.find(team => team.id === state.game?.ctTeam);
-  el('sides-note').textContent = detected ? `Сейчас за CT играет ${detected.tag}.` : 'Укажите команду вручную, если игровые ники отличаются от составов.';
+  el('sides-note').textContent = detected ? `Сейчас за CT играет ${detected.tag}.` : 'Укажите, кто начинает за CT.';
   el('broadcast-ct').disabled = busy;
-  el('broadcast-save').disabled = !online || busy;
+  const ready = selectedMaps().every(Boolean) && match.teams.some(team => team.id === el('broadcast-ct').value);
+  el('start').disabled = !online || busy || !ready;
+  el('broadcast-save').disabled = !online || busy || !ready;
+}
+
+function renderSeries(match, saved, isLive) {
+  const results = saved?.mapResults ?? [];
+  const maps = saved?.maps ?? [];
+  const index = results.length;
+  const current = maps[index];
+  const canScore = Boolean(isLive && !match.score && maps.length === match.bestOf && current && saved?.ctTeam);
+  const detected = current && saved?.mapWinners?.[current];
+  const suggested = match.teams.find(team => team.id === detected);
+  const mapList = el('series-maps');
+  mapList.hidden = !maps.length;
+  setMarkup(mapList, maps.map((map, position) => {
+    const winner = match.teams.find(team => team.id === results[position]?.winner);
+    const playing = Boolean(canScore && position === index);
+    return `<li${playing ? ' aria-current="step"' : ''}><span>${safe(mapName(map))}</span>${winner ? `<strong>${safe(winner.tag)}</strong>` : ''}</li>`;
+  }).join(''));
+  el('map-result').hidden = !isLive;
+  el('current-map').textContent = canScore ? `Карта ${index + 1} · ${mapName(current)}` : 'Сохраните карты и сторону CT, чтобы отмечать победителей.';
+  const note = el('map-result-note');
+  note.hidden = !canScore || !suggested;
+  note.textContent = suggested ? `CS2 сообщает о победе ${suggested.tag}.` : '';
+  const buttons = el('map-winner-buttons');
+  buttons.hidden = !canScore;
+  setMarkup(buttons, match.teams.map(team => `<button type="button" class="admin-btn is-primary" data-map-winner="${safe(team.id)}" data-map-index="${index}">Победа ${safe(team.tag)}</button>`).join(''));
+  for (const button of buttons.querySelectorAll('button')) button.disabled = !online || busy;
+  el('map-undo').hidden = !isLive || !results.length || Boolean(match.score);
+  el('map-undo').disabled = !online || busy;
 }
 
 function renderDetail() {
   const match = matches.find(item => item.id === selectedId);
+  const workspace = document.querySelector('.admin-workspace');
+  workspace.classList.toggle('has-selected-match', Boolean(match));
   el('detail-content').hidden = !match;
   el('detail-empty').hidden = Boolean(match);
   el('detail-stage').hidden = !match;
@@ -206,24 +248,38 @@ function renderDetail() {
 
   const changed = renderedMatch !== match.id;
   renderedMatch = match.id;
-  if (changed) el('settings').open = false;
+  const isLive = match.id === state.active;
+  const saved = state.broadcast?.[match.id];
+  const needsSetup = saved?.maps?.length !== match.bestOf || !saved?.ctTeam;
+  if (changed) {
+    el('settings').open = !match.winner && (!isLive || needsSetup);
+    el('manual-result').open = false;
+  }
   const [status, tone] = statusFor(match, state.active);
   el('detail-stage').textContent = matchCaption(match);
   el('detail-status').textContent = status;
   el('detail-status').dataset.tone = tone;
-  setMarkup(el('detail-teams'), match.teams.map((team, index) => `<div class="admin-team">
-    <span class="admin-team-mark" style="--team:${safe(team.color)}">${safe(team.tag)}</span>
-    <span>${safe(team.players.join(' / '))}</span>${match.score ? `<strong>${match.score[index]}</strong>` : ''}</div>`).join('<span class="admin-vs">×</span>'));
+  const score = seriesScore(match);
+  setMarkup(el('detail-teams'), `<div class="admin-team admin-team-left">
+    <span class="admin-team-mark" style="--team:${safe(match.teams[0].color)}">${safe(match.teams[0].tag)}</span>
+    <span>${safe(match.teams[0].players.join(' / '))}</span></div>
+    <div class="admin-series-score"><strong aria-label="Счёт по картам ${score.join(' : ')}">${score.join(' : ')}</strong><span>Карты</span></div>
+    <div class="admin-team admin-team-right">
+    <span class="admin-team-mark" style="--team:${safe(match.teams[1].color)}">${safe(match.teams[1].tag)}</span>
+    <span>${safe(match.teams[1].players.join(' / '))}</span></div>`);
 
-  const isLive = match.id === state.active;
   const onAir = matches.find(item => item.id === state.active);
-  el('broadcast-note').textContent = isLive ? (state.game?.mapId ? `Карта · ${mapName(state.game.mapId)}` : 'Матч выбран для оверлея.')
-    : onAir ? `Сейчас выбран ${matchTags(onAir)}.` : 'Матч для оверлея пока не выбран.';
+  el('broadcast-note').textContent = isLive ? 'Матч выбран для оверлея.'
+    : onAir ? `Сейчас в эфире ${matchTags(onAir)}.` : 'Выберите карты и сторону CT перед эфиром.';
   el('start').hidden = isLive || Boolean(match.winner);
   el('start').textContent = onAir && !isLive ? 'Переключить эфир' : 'Вывести в эфир';
-  el('start').disabled = !online || busy;
+  el('broadcast-save').hidden = !isLive || Boolean(match.winner);
+  el('settings').hidden = Boolean(match.winner);
   el('pause').hidden = !isLive;
   el('pause').disabled = !online || busy;
+  el('match-reset').hidden = !match.score && !saved?.mapResults?.length && !isLive;
+  el('match-reset').disabled = !online || busy;
+  renderSeries(match, saved, isLive);
   renderResult(match, changed);
   renderBroadcast(match, changed);
 }
@@ -268,23 +324,20 @@ function renderGame() {
 
   const pairingNote = !linked ? 'Чтобы привязать игру, выберите матч и нажмите «Вывести в эфир».'
     : !ctTeam ? 'Стороны команд не определены. Укажите команду за CT в настройках матча.' : '';
-  const resultNote = finished && !linked?.score ? 'После завершения серии подтвердите счёт по картам в карточке матча.' : '';
+  const resultNote = finished && !linked?.score ? 'Отметьте победителя карты в карточке матча.' : '';
   note.textContent = unavailable ? 'Показаны последние полученные данные.' : pairingNote || resultNote;
   note.hidden = !note.textContent;
 }
 
 function render(next) {
   if (state.started && !next.started) {
-    selectedId = '';
-    filter = 'current';
+    clearMatchDrafts();
     streamEdited = false;
-    broadcastSignature = '';
-    resultDrafts.clear();
-    broadcastDrafts.clear();
     showMessage('toast', 'Турнир сброшен');
   }
   state = next;
   matches = resolveMatches(event, state).filter(match => match.teams.every(Boolean));
+  if (selectedId && selectedId === state.active && !filteredMatches().some(match => match.id === selectedId)) filter = 'all';
   selectVisibleMatch();
   const connection = el('service');
   const connected = online && state.gsi;
@@ -295,6 +348,7 @@ function render(next) {
   if (!streamEdited) el('stream').value = state.streamUrl || '';
   el('stream').disabled = busy;
   el('stream-save').disabled = !online || busy;
+  el('tournament-reset').disabled = !online || busy;
   renderOverview();
   renderGame();
   renderQueue();
@@ -332,14 +386,10 @@ function logout(text = '', error = false) {
   session = null;
   state = emptyState;
   matches = [];
-  selectedId = '';
-  renderedMatch = null;
-  filter = 'current';
+  clearMatchDrafts();
   busy = false;
   online = false;
   streamEdited = false;
-  resultDrafts.clear();
-  broadcastDrafts.clear();
   el('stream').value = '';
   el('key').value = '';
   el('session-controls').hidden = true;
@@ -381,17 +431,31 @@ async function send(payload, success) {
     const data = await requestControl(activeSession.key, payload);
     if (session !== activeSession) return;
     if (payload.action === 'stream') streamEdited = false;
-    if (payload.action === 'broadcast') {
+    if (payload.action === 'broadcast' || payload.action === 'start') {
       broadcastDrafts.delete(payload.match);
       broadcastSignature = '';
+      if (payload.action === 'start') el('settings').open = false;
     }
     if (payload.action === 'result') resultDrafts.delete(payload.match);
+    if (payload.action === 'map-result' || payload.action === 'map-undo') resultDrafts.delete(payload.match);
+    if (payload.action === 'match-reset') {
+      clearMatchDrafts();
+      selectedId = payload.match;
+      filter = 'all';
+      el('settings').open = true;
+    }
+    if (payload.action === 'reset') {
+      clearMatchDrafts();
+      streamEdited = false;
+      el('tournament-reset').closest('details').open = false;
+    }
     if (payload.action === 'round') {
       filter = 'current';
       selectedId = data.rounds.at(-1)?.[0]?.id ?? '';
     }
+    const seriesEnded = payload.action === 'map-result' && data.results[payload.match];
     state = data;
-    showMessage('toast', success);
+    showMessage('toast', seriesEnded ? 'Серия завершена. Итог опубликован.' : success);
   } catch (error) {
     if (session !== activeSession) return;
     if ([401, 403].includes(error.status)) logout('Доступ завершён. Войдите снова.', true);
@@ -440,6 +504,11 @@ el('login').addEventListener('submit', async submit => {
     el('login-panel').hidden = true;
     el('admin-panel').hidden = false;
     el('session-controls').hidden = false;
+    if (next.active) {
+      selectedId = next.active;
+      const currentRound = `G${next.rounds.length}.`;
+      if (selectedId.startsWith('G') && !selectedId.startsWith(currentRound)) filter = 'all';
+    }
     render(next);
     activeSession.timer = setTimeout(() => refresh(activeSession), 1800);
     el('admin-title').focus();
@@ -451,7 +520,6 @@ el('logout').addEventListener('click', () => logout());
 el('event').addEventListener('click', () => send({ action: 'event' }, 'Турнир начат. Пары первого тура опубликованы.'));
 el('round').addEventListener('click', () => send({ action: 'round', round: state.rounds.length }, 'Следующий тур опубликован.'));
 el('open-next').addEventListener('click', () => selectMatch(overviewMatch?.id, true));
-el('start').addEventListener('click', () => send({ action: 'start', match: selectedId }, 'Матч выбран для эфира.'));
 el('pause').addEventListener('click', () => {
   if (selectedId === state.active) send({ action: 'pause' }, 'Матч убран из эфира.');
 });
@@ -467,14 +535,34 @@ for (const button of document.querySelectorAll('.admin-filter')) {
     renderDetail();
   });
 }
-el('score-quick').addEventListener('click', e => {
-  const button = e.target.closest('button[data-winner]');
-  if (!button) return;
-  const winner = Number(button.dataset.winner);
-  el('left').value = Number(winner === 0);
-  el('right').value = Number(winner === 1);
-  updateScoreDraft();
-  el('save').focus({ preventScroll: true });
+el('map-winner-buttons').addEventListener('click', e => {
+  const choice = e.target.closest('button[data-map-winner]')?.dataset;
+  if (!choice || e.detail > 1 || selectedId !== state.active) return;
+  const saved = state.broadcast?.[selectedId];
+  const expectedIndex = saved?.mapResults?.length ?? 0;
+  const mapId = saved?.maps?.[expectedIndex];
+  if (!mapId || Number(choice.mapIndex) !== expectedIndex) return;
+  send({ action: 'map-result', match: selectedId, mapId, winner: choice.mapWinner, expectedIndex, expectedRevision: saved?.mapRevision ?? 0 }, 'Победитель карты записан.');
+});
+el('map-undo').addEventListener('click', () => {
+  const saved = state.broadcast?.[selectedId];
+  const expectedIndex = saved?.mapResults?.length ?? 0;
+  if (selectedId !== state.active || !expectedIndex || !window.confirm('Отменить результат последней карты?')) return;
+  send({ action: 'map-undo', match: selectedId, expectedIndex, expectedRevision: saved?.mapRevision ?? 0 }, 'Результат карты отменён.');
+});
+el('match-reset').addEventListener('click', () => {
+  const match = matches.find(item => item.id === selectedId);
+  if (!match) return;
+  const affected = match.id.startsWith('G') ? ' Связанные следующие туры и плей-офф тоже будут сброшены.'
+    : match.id.startsWith('S') ? ' Итог финала тоже будет сброшен.' : '';
+  if (window.confirm(`Сбросить счёт матча ${matchTags(match)}?${affected}`)) {
+    send({ action: 'match-reset', match: match.id, confirm: true }, 'Матч сброшен. Его можно сыграть заново.');
+  }
+});
+el('tournament-reset').addEventListener('click', () => {
+  if (window.confirm('Сбросить весь турнир? Результаты, туры и настройки эфира будут удалены.')) {
+    send({ action: 'reset', confirm: true }, 'Турнир сброшен.');
+  }
 });
 for (const id of ['left', 'right']) el(id).addEventListener('input', updateScoreDraft);
 el('stream').addEventListener('input', () => { streamEdited = true; });
@@ -482,17 +570,27 @@ el('broadcast-maps').addEventListener('change', () => {
   const match = matches.find(item => item.id === selectedId);
   if (!match) return;
   updateBroadcastDraft();
-  renderMapList(match, state.broadcast?.[selectedId], broadcastDrafts.get(selectedId));
+  renderBroadcast(match, false);
 });
-el('broadcast-ct').addEventListener('change', updateBroadcastDraft);
+el('broadcast-ct').addEventListener('change', () => {
+  const match = matches.find(item => item.id === selectedId);
+  if (!match) return;
+  updateBroadcastDraft();
+  renderBroadcast(match, false);
+});
 el('stream-form').addEventListener('submit', e => {
   e.preventDefault();
   send({ action: 'stream', url: el('stream').value.trim() }, 'Ссылка на Twitch сохранена.');
 });
 el('broadcast-settings').addEventListener('submit', e => {
   e.preventDefault();
-  const maps = selectedMaps().filter(Boolean);
-  send({ action: 'broadcast', match: selectedId, maps, ctTeam: el('broadcast-ct').value }, 'Карты и стороны сохранены.');
+  const match = matches.find(item => item.id === selectedId);
+  const maps = selectedMaps();
+  const ctTeam = el('broadcast-ct').value;
+  if (!match || !maps.every(Boolean) || !ctTeam) return;
+  const isLive = match.id === state.active;
+  send({ action: isLive ? 'broadcast' : 'start', match: match.id, maps, ctTeam },
+    isLive ? 'Карты и сторона CT сохранены.' : 'Матч в эфире.');
 });
 el('result').addEventListener('submit', e => {
   e.preventDefault();
