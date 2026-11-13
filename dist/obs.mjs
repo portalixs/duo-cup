@@ -401,14 +401,20 @@ function paintEvents(now = Date.now()) {
 }
 
 function renderStandby(state, match, final) {
-  el('standby-message').textContent = final.winner ? 'Турнир завершён' : state.started ? 'Перерыв в эфире' : 'Скоро начнём';
-  el('standby-detail').textContent = final.winner ? `Победители · ${final.winner.players.join(' и ')}`
-    : match ? `${stageName(match.id)} · BO${match.bestOf}` : state.started ? 'Следите за сеткой турнира' : event.dateLabel;
-  el('standby-match').hidden = !match || Boolean(final.winner);
-  if (match) {
-    for (const [i, id] of ['standby-left', 'standby-right'].entries()) {
-      el(id).textContent = match.teams[i].tag;
-      el(id).style.color = match.teams[i].color;
+  const winner = final?.winner;
+  const message = winner ? 'Турнир завершён' : state.started ? 'Перерыв в эфире' : 'Скоро начнём';
+  const detail = winner ? `Победители · ${winner.players.join(' и ')}`
+    : match ? `${stageName(match.id)} · BO${match.bestOf}` : state.started ? '' : event.dateLabel;
+  setText(el('standby-message'), message);
+  setText(el('standby-detail'), detail);
+  el('standby-detail').hidden = !detail;
+  el('standby-match').hidden = !match || Boolean(winner);
+  if (match && !winner) {
+    const score = match.score ?? state.seriesScores?.[match.id] ?? recordedSeriesScore(match, state.broadcast?.[match.id]);
+    setText(el('standby-score'), score.join(' : '));
+    for (const [i, side] of ['left', 'right'].entries()) {
+      setText(el(`standby-${side}`), match.teams[i].tag);
+      setText(el(`standby-${side}-players`), match.teams[i].players.join(' / '));
     }
   }
 }

@@ -57,20 +57,24 @@
   <main id="map-results" class="map-results" aria-label="Итоги карты" hidden></main>
 
   <main id="standby" class="standby" hidden>
+    <div class="standby-arena" aria-hidden="true"></div>
+    <div class="standby-frame" aria-hidden="true"></div>
     <header class="standby-header">
-      <div class="wordmark"><span class="slashes" aria-hidden="true"></span>DUO<span>CUP</span></div>
-      <span class="standby-meta">COUNTER-STRIKE 2 <span>/</span> XPLAY.GG</span>
+      <div class="standby-station"><i aria-hidden="true"></i>54CS2</div>
+      <p class="standby-meta">Counter-Strike 2 <b>2×2</b></p>
     </header>
     <div class="standby-body">
-      <div class="standby-content">
-        <p class="eyebrow"><span></span> ТУРНИР CS2 · 2×2</p>
-        <h1 id="standby-message">Скоро начнём</h1>
-        <p id="standby-detail" class="standby-detail"></p>
-        <div id="standby-match" class="standby-match" hidden><strong id="standby-left"></strong><span>VS</span><strong id="standby-right"></strong></div>
-      </div>
-      <img class="standby-art" src="/art.svg" alt="">
+      <p class="standby-brand">DUO <span>CUP</span></p>
+      <h1 id="standby-message">Скоро начнём</h1>
+      <p id="standby-detail" class="standby-detail" hidden></p>
     </div>
-    <footer class="standby-footer"><span>DUO CUP <span>/</span> ТРАНСЛЯЦИЯ</span><span class="footer-lines" aria-hidden="true"></span><span>CS2 <span>/</span> TWITCH</span></footer>
+    <footer class="standby-footer">
+      <div id="standby-match" class="standby-match" aria-label="Текущая серия" hidden>
+        <div class="standby-team standby-team-left"><strong id="standby-left"></strong><span id="standby-left-players"></span></div>
+        <div id="standby-score" class="standby-score" aria-label="Счёт по картам"></div>
+        <div class="standby-team standby-team-right"><strong id="standby-right"></strong><span id="standby-right-players"></span></div>
+      </div>
+    </footer>
   </main>
 </body>
 </html>
