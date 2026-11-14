@@ -5,6 +5,7 @@ const { dirname, join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { createService, readJson, writeJson } = require('./commentator-service.cjs');
 const setup = require('./commentator-setup.cjs');
+const obsSetup = require('./commentator-obs-setup.cjs');
 
 const collectionDefault = 'DUO CUP · CS2';
 const collection4k = 'DUO CUP · CS2 4K';
@@ -68,12 +69,14 @@ async function openCommentator(overlay) {
       const collections = await setup.findObsCollections();
       const scenesReady = collections.some(item => item.templateName === collectionName());
       const running = obsExe ? await setup.obsRunning().catch(() => null) : false;
-      const next = { connected: false, bufferActive: false, running, installed: Boolean(obsExe), scenesReady };
+      const profile = await obsSetup.readObsProfile().catch(() => null);
+      const next = { connected: false, bufferActive: false, running, installed: Boolean(obsExe), scenesReady, profileReady: Boolean(profile?.ready) };
       if (running) {
         try {
-          const scene = await requestObs('GetCurrentProgramScene');
+          const scene = await requestObs('GetSceneList');
           next.connected = true;
           next.currentScene = scene.currentProgramSceneName ?? scene.sceneName;
+          next.availableScenes = scene.scenes?.map(item => item.sceneName) ?? [];
         } catch { next.error = 'В OBS включите WebSocket и проверьте порт и пароль.'; }
         if (next.connected) {
           // Older OBS versions reject this request when Replay Buffer is disabled in the profile.
@@ -174,7 +177,9 @@ async function openCommentator(overlay) {
     const name = collectionName();
     const collection = collections.find(item => item.templateName === name && item.name === name)
       ?? collections.find(item => item.templateName === name);
-    await execute(obsExe, collection ? ['--collection', collection.name] : [], { cwd: dirname(obsExe) });
+    const profile = await obsSetup.readObsProfile().catch(() => null);
+    const profileArgs = profile?.profileName ? ['--profile', profile.profileName] : [];
+    await execute(obsExe, [...profileArgs, ...(collection ? ['--collection', collection.name] : [])], { cwd: dirname(obsExe) });
     lastProbe = 0;
     return { message: collection ? `OBS запущен с коллекцией «${collection.name}».` : 'OBS запущен. Подготовьте сцены DUO CUP для своей коллекции.' };
   }
@@ -185,23 +190,69 @@ async function openCommentator(overlay) {
     return {};
   }
 
+  async function installCs2Config(cfgDir) {
+    const generatedCfg = join(runtime, 'gamestate_integration_duocup.cfg');
+    const hudCfg = join(obsDir, 'duocup_match_hud.cfg');
+    if (setup.hasCurrentGameConfig(cfgDir, generatedCfg, hudCfg)) return null;
+    return setup.installGameConfigs({ cfgDir, generatedCfg, hudCfg });
+  }
+
   const actions = {
     startService: () => service.start(serviceOptions()), stopService: service.stop,
+    async setupFirstRun() {
+      refreshLocations();
+      const current = await service.getStatus();
+      if (current.running && !current.owned) throw new Error('Закройте старое окно start.cmd и повторите подготовку.');
+      if (!current.running) await service.start(serviceOptions());
+
+      const messages = ['Служба DUO CUP работает.'];
+      const cfgDir = settings.cs2Path || detectedPath;
+      if (cfgDir) {
+        try {
+          const result = await installCs2Config(cfgDir);
+          messages.push(result ? 'Конфиги CS2 обновлены. Если игра открыта, перезапустите её.' : 'Конфиги CS2 готовы.');
+        } catch (error) { messages.push(error.message); }
+      } else messages.push('Установите CS2 через Steam или выберите папку игры.');
+
+      if (await setup.obsRunning()) {
+        messages.push('Закройте OBS, чтобы подготовить его профиль и добавить коллекции, затем нажмите кнопку ещё раз.');
+      } else {
+        const scenes = await setup.prepareObsCollections({ sourceDir: obsDir });
+        const canvas = collectionName() === collection4k ? { width: 3840, height: 2160 } : { width: 1920, height: 1080 };
+        const profile = await obsSetup.prepareObsProfile({ canvas });
+        if (scenes.ready && profile.ready) {
+          messages.push('Сцены OBS, 60 FPS и буфер готовы.');
+          if (!readJson(settingsFile, {}).obsCollection && profile.baseWidth === 3840) {
+            settings = { ...settings, obsCollection: collection4k };
+            writeJson(settingsFile, settings);
+          }
+        }
+        if (!profile.replayAvailable) messages.push('Текущий формат записи OBS не поддерживает буфер. Выберите стандартный формат записи в OBS.');
+        if (scenes.running || profile.running) messages.push('Закройте OBS и повторите подготовку.');
+      }
+      if (!obsExe) messages.push((await actions.installObs())?.message ?? 'Установите OBS Studio.');
+      else if (!settings.obsSecret) messages.push('Включите WebSocket в OBS и сохраните его пароль в пульте.');
+      lastProbe = 0;
+      return { message: messages.join(' ') };
+    },
     async launchBroadcast() {
-      if (!obsExe || !(settings.cs2Path || detectedPath)) throw new Error('Сначала установите OBS и выберите папку CS2.');
+      const cfgDir = settings.cs2Path || detectedPath;
+      if (!obsExe || !cfgDir) throw new Error('Сначала подготовьте рабочее место на вкладке «Настройка».');
       const current = await service.getStatus();
       if (current.running && !current.owned) throw new Error('Закройте старое окно start.cmd и повторите запуск.');
       if (!current.running) await service.start(serviceOptions());
+      const configsUpdated = await installCs2Config(cfgDir);
       await launchObs();
       await shell.openExternal('steam://rungameid/730');
-      return { message: 'Служба запущена. OBS и CS2 можно проверить перед трансляцией.' };
+      return { message: configsUpdated ? 'Служба запущена, конфиги CS2 обновлены. Если игра была открыта, перезапустите её.'
+        : 'Служба запущена. OBS и CS2 можно проверить перед трансляцией.' };
     },
     async installCs2() {
       const cfgDir = settings.cs2Path || detectedPath;
       if (!cfgDir) throw new Error('Выберите папку установки CS2.');
       if (!service.ownsProcess()) throw new Error('Запустите службу DUO CUP из приложения.');
-      const result = await setup.installGameConfigs({ cfgDir, generatedCfg: join(runtime, 'gamestate_integration_duocup.cfg'),
-        hudCfg: join(obsDir, 'duocup_match_hud.cfg') });
+      const result = await installCs2Config(cfgDir);
+      if (!result) return { message: 'Конфиги CS2 уже установлены.' };
       return { message: `Конфиги CS2 установлены. ${result.backups.length ? 'Старые файлы сохранены рядом. ' : ''}Перезапустите CS2.` };
     },
     async launchCs2() { await shell.openExternal('steam://rungameid/730'); return { message: 'Команда запуска отправлена в Steam.' }; },

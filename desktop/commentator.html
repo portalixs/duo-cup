@@ -29,7 +29,8 @@
           <p id="hero-detail">Проверяем службы трансляции.</p>
         </div>
         <div class="hero-actions">
-          <button type="button" class="button primary" data-action="launchBroadcast" disabled>Запустить эфирные программы</button>
+          <button type="button" class="button primary" id="first-run-entry" data-view="setup" data-focus="first-run-title" hidden>Подготовить рабочее место</button>
+          <button type="button" class="button primary" id="launch-broadcast" data-action="launchBroadcast" disabled>Запустить эфирные программы</button>
           <button type="button" id="service-control" class="button" data-action="startService" disabled>Запустить службу</button>
           <button type="button" class="button" data-action="openControl" disabled>Панель турнира на сайте</button>
         </div>
@@ -86,7 +87,26 @@
     </section>
 
     <section id="setup" class="view secondary-view" aria-labelledby="setup-title" hidden>
-      <header class="page-heading"><h1 id="setup-title">Настройка</h1><p>Сохраните подключения, затем примените конфигурацию CS2.</p></header>
+      <header class="page-heading"><h1 id="setup-title">Настройка</h1></header>
+      <section class="surface first-run" aria-labelledby="first-run-title">
+        <div class="section-head">
+          <div>
+            <h2 id="first-run-title" tabindex="-1">Первый запуск</h2>
+            <p id="first-run-hint">Запустим службу, установим конфиги игры и подготовим сцены OBS.</p>
+          </div>
+          <button type="button" class="button primary" data-action="setupFirstRun" id="first-run-action" disabled>Подготовить рабочее место</button>
+        </div>
+        <dl class="readiness">
+          <div><dt>Локальная служба</dt><dd class="status" id="check-service">Проверяем…</dd></div>
+          <div><dt>Конфиги CS2</dt><dd class="status" id="check-game">Проверяем…</dd></div>
+          <div><dt>OBS Studio</dt><dd class="status" id="check-obs">Проверяем…</dd></div>
+          <div><dt>Коллекции DUO CUP</dt><dd class="status" id="check-scenes">Проверяем…</dd></div>
+          <div><dt>Управление OBS</dt><dd class="status" id="check-websocket">Проверяем…</dd></div>
+          <div><dt>Буфер повтора</dt><dd class="status" id="check-buffer">Проверяем…</dd></div>
+          <div id="check-site-row"><dt>Связь с сайтом</dt><dd class="status" id="check-site">Проверяем…</dd></div>
+        </dl>
+        <p id="first-run-next" class="first-run-next" hidden></p>
+      </section>
       <form id="settings" class="settings" autocomplete="off">
         <section class="surface form-card" aria-labelledby="site-title">
           <h2 id="site-title">Сайт турнира</h2>
