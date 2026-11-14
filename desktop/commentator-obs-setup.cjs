@@ -11,6 +11,36 @@ async function optionalRead(file) {
   catch (error) { if (error.code === 'ENOENT') return null; throw error; }
 }
 
+function obsConfigError(code, message) {
+  return Object.assign(new Error(message), { code });
+}
+
+async function readLocalObsWebSocket({ configDir = defaultConfig() } = {}) {
+  const enterManually = 'Введите порт и пароль из настроек WebSocket в OBS вручную.';
+  if (typeof configDir !== 'string' || !isAbsolute(configDir)) {
+    throw obsConfigError('OBS_CONFIG_UNREADABLE', `Папка настроек OBS недоступна. ${enterManually}`);
+  }
+
+  let text;
+  try { text = await optionalRead(join(configDir, 'plugin_config', 'obs-websocket', 'config.json')); }
+  catch { throw obsConfigError('OBS_CONFIG_UNREADABLE', `Не удалось прочитать настройки OBS. ${enterManually}`); }
+  if (text == null) throw obsConfigError('OBS_CONFIG_MISSING', `Файл настроек WebSocket не найден. ${enterManually}`);
+
+  const invalid = () => obsConfigError('OBS_CONFIG_INVALID', `OBS сохранил неполные настройки WebSocket. ${enterManually}`);
+  let config;
+  try { config = JSON.parse(text.replace(/^\uFEFF/, '')); }
+  catch { throw invalid(); }
+
+  const { server_enabled: enabled, server_port: port, auth_required: auth, server_password: password } = config ?? {};
+  if (enabled === false) {
+    throw obsConfigError('OBS_WEBSOCKET_DISABLED', 'Включите сервер в меню OBS «Инструменты → Настройки сервера WebSocket» и сохраните изменения.');
+  }
+  if (enabled !== true || !Number.isInteger(port) || port < 1 || port > 65535 || typeof auth !== 'boolean'
+    || (auth && (typeof password !== 'string' || !password))) throw invalid();
+
+  return { port, password: auth ? password : '' };
+}
+
 function sectionName(line) {
   return /^\s*\[([^\]]+)\]\s*$/.exec(line)?.[1].trim().toLowerCase();
 }
@@ -142,4 +172,4 @@ async function prepareObsProfile({ configDir = defaultConfig(), canvas } = {}) {
   return { ...profileStatus({ ...profile, text }), running: false, changed: true };
 }
 
-module.exports = { readObsProfile, prepareObsProfile };
+module.exports = { readLocalObsWebSocket, readObsProfile, prepareObsProfile };

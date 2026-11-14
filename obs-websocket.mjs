@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 const hash = value => createHash('sha256').update(value).digest('base64');
+const obsError = (code, message) => Object.assign(new Error(message), { code });
+const protocolError = () => obsError('OBS_PROTOCOL_UNSUPPORTED', 'Проверьте, что выбран порт WebSocket 5.x в OBS Studio 28 или новее.');
 
-export function createObsConnection({ port = 4455, password = '' }, onEvent) {
+export function createObsConnection({ port = 4455, password = '' }, onEvent = () => {}) {
   let current;
 
   function connect() {
@@ -12,27 +14,48 @@ export function createObsConnection({ port = 4455, password = '' }, onEvent) {
     const connection = { socket, pending };
     current = connection;
     connection.ready = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => socket.close(), 2500);
-      socket.addEventListener('close', () => {
+      let opened = false;
+      let identified = false;
+      const unreachable = () => obsError('OBS_UNREACHABLE', `WebSocket OBS недоступен на порту ${port}. Проверьте порт и включите сервер в OBS.`);
+      const timer = setTimeout(() => {
+        fail(opened ? obsError('OBS_HANDSHAKE_TIMEOUT', `Порт ${port} открылся, но OBS WebSocket 5.x не завершил подключение. Проверьте порт в OBS.`) : unreachable());
+      }, 2500);
+      function fail(error) {
         clearTimeout(timer);
         if (current === connection) current = null;
-        const error = new Error('Нет связи с OBS WebSocket');
         reject(error);
         for (const request of pending.values()) request.reject(error);
+        if (socket.readyState < WebSocket.CLOSING) socket.close();
+      }
+      socket.addEventListener('open', () => { opened = true; });
+      socket.addEventListener('close', ({ code }) => {
+        const error = code === 4009
+          ? obsError('OBS_AUTH_FAILED', 'OBS отклонил пароль WebSocket. Скопируйте актуальный пароль из OBS и сохраните его в пульте.')
+          : code === 4010 ? protocolError()
+            : opened ? obsError('OBS_DISCONNECTED', 'OBS закрыл соединение WebSocket.') : unreachable();
+        fail(error);
       });
-      socket.addEventListener('error', () => socket.close());
       socket.addEventListener('message', event => {
         let packet;
         try { packet = JSON.parse(event.data); }
-        catch { socket.close(); return; }
+        catch { fail(protocolError()); return; }
         const { op, d } = packet ?? {};
-        if (!d) return;
+        if (!d || (!identified && op !== 0 && op !== 2)) {
+          if (!identified) fail(protocolError());
+          return;
+        }
         if (op === 0) {
           const { authentication } = d;
+          if (!Number.isInteger(d.rpcVersion) || d.rpcVersion < 1) { fail(protocolError()); return; }
+          if (authentication && !password) {
+            fail(obsError('OBS_PASSWORD_REQUIRED', 'OBS требует пароль WebSocket. Скопируйте пароль из OBS и сохраните его в пульте.'));
+            return;
+          }
           const proof = authentication && hash(hash(password + authentication.salt) + authentication.challenge);
           const eventSubscriptions = 4 | 64 | 256; // Scenes, outputs and media inputs.
           socket.send(JSON.stringify({ op: 1, d: { rpcVersion: 1, eventSubscriptions, ...(proof && { authentication: proof }) } }));
         } else if (op === 2) {
+          identified = true;
           clearTimeout(timer);
           resolve();
         } else if (op === 5) {

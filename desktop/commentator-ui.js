@@ -133,7 +133,7 @@ function renderFirstRun({ settings, service, obs, cs2, appControl, hasCs2Path, s
   } else if (obs.installed && !obs.running && obs.scenesReady) {
     next.push('Запустите OBS из пульта.');
   } else if (obs.running && !obs.connected) {
-    next.push('Включите WebSocket в OBS и сохраните его пароль ниже.');
+    next.push(obs.connectionError || 'Включите WebSocket в OBS и нажмите «Подключить локальный OBS».');
   } else if (collectionNeedsSelection) {
     next.push('Выберите коллекцию DUO CUP в OBS или перезапустите OBS из пульта.');
   } else if (obs.connected && !obs.bufferActive) {
@@ -172,7 +172,7 @@ function render() {
   status('obs-tone', obs.connected ? 'Подключено' : obs.installed ? 'Ожидание' : 'Установка', obs.connected ? 'good' : 'idle');
   element('obs-state').textContent = obs.connected ? (obs.bufferActive ? 'Буфер повтора работает.'
     : obs.bufferAvailable === false ? 'WebSocket подключён. Буфер повтора выключен в настройках OBS.' : 'WebSocket подключён. Буфер остановлен.')
-    : obs.installed ? (obs.running ? 'Проверьте WebSocket и пароль.' : 'Откройте OBS и включите WebSocket.') : 'Установите OBS Studio для захвата игры.';
+    : obs.connectionError || (obs.installed ? 'Откройте OBS и включите WebSocket.' : 'Установите OBS Studio для захвата игры.');
   const obsButton = element('obs-launch');
   obsButton.dataset.action = obs.installed ? 'launchObs' : 'installObs';
   obsButton.textContent = obs.installed ? 'Открыть OBS' : 'Установить OBS';
@@ -207,6 +207,7 @@ function render() {
   element('obs-password').disabled = Boolean(pending) || element('clear-obs').checked;
   element('cs2-detected').textContent = cs2.detectedPath ? `Steam нашёл игру: ${cs2.detectedPath}` : 'Укажите папку, в которой находятся файлы игры.';
   element('obs-setup-hint').textContent = obs.scenesReady ? 'Коллекции DUO CUP готовы.' : 'Для добавления коллекций закройте OBS.';
+  element('obs-connection-hint').textContent = obs.connected ? `OBS подключён на порту ${settings.obsPort}.` : obs.connectionError || '';
   element('save-settings').disabled = Boolean(pending) || !changed;
   element('choose-cs2').disabled = Boolean(pending);
   element('copy-hud-command').disabled = Boolean(pending);
@@ -231,6 +232,7 @@ function render() {
           knife: appControl && Boolean(service.active) && mayKnife && !obs.replayPlaying,
         installCs2: appControl && hasCs2Path && !changed,
         setupObsScenes: obs.installed && obs.running !== true && !obs.connected, openObsScenes: true,
+        useLocalObsSettings: !changed,
         openLogs: true, openRuntime: true, openObsGuide: true, openUpdates: true,
       }[action];
     }
@@ -265,7 +267,7 @@ async function run(name, operation, { save = false, success = '' } = {}) {
   try {
     const result = await operation();
     if (save) changed = false;
-    notice(result?.message || success);
+    notice(result?.message || success, result?.tone);
     await refresh({ fill: save, showError: true });
   } catch (error) {
     notice(error.message, 'error');
@@ -286,7 +288,7 @@ for (const button of document.querySelectorAll('[data-view]')) {
 for (const button of buttons) {
   button.addEventListener('click', () => {
     const action = button.dataset.action;
-    return run(action, () => api.action(action), { save: action === 'setupFirstRun' });
+    return run(action, () => api.action(action), { save: action === 'setupFirstRun' || action === 'useLocalObsSettings' });
   });
 }
 form.addEventListener('input', () => { changed = true; render(); });

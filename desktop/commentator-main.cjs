@@ -34,6 +34,10 @@ async function openCommentator(overlay) {
   let busy = false;
 
   const reveal = value => value ? safeStorage.decryptString(Buffer.from(value, 'base64')) : '';
+  const obsOptions = () => ({ port: settings.obsPort, password: reveal(settings.obsSecret) });
+  function hasObsPassword(password) {
+    try { return obsOptions().password === password; } catch { return false; }
+  }
   function protect(value) {
     if (!value) return '';
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows не удалось защитить ключи профиля.');
@@ -43,7 +47,7 @@ async function openCommentator(overlay) {
   function serviceOptions() {
     return {
       publication: settings.siteUrl && settings.publishSecret ? { url: settings.siteUrl, key: reveal(settings.publishSecret) } : null,
-      obs: { port: settings.obsPort, password: reveal(settings.obsSecret) },
+      obs: obsOptions(),
     };
   }
 
@@ -53,7 +57,7 @@ async function openCommentator(overlay) {
   }
 
   async function requestObs(type, fields) {
-    obs ??= createObsConnection(serviceOptions().obs, () => {});
+    obs ??= createObsConnection(obsOptions(), () => {});
     return obs.request(type, fields, 950);
   }
 
@@ -68,23 +72,28 @@ async function openCommentator(overlay) {
       if (!obsExe) obsExe = setup.findObs();
       const collections = await setup.findObsCollections();
       const scenesReady = collections.some(item => item.templateName === collectionName());
-      const running = obsExe ? await setup.obsRunning().catch(() => null) : false;
+      const running = await setup.obsRunning().catch(() => null);
       const profile = await obsSetup.readObsProfile().catch(() => null);
-      const next = { connected: false, bufferActive: false, running, installed: Boolean(obsExe), scenesReady, profileReady: Boolean(profile?.ready) };
-      if (running) {
-        try {
-          const scene = await requestObs('GetSceneList');
-          next.connected = true;
-          next.currentScene = scene.currentProgramSceneName ?? scene.sceneName;
-          next.availableScenes = scene.scenes?.map(item => item.sceneName) ?? [];
-        } catch { next.error = 'В OBS включите WebSocket и проверьте порт и пароль.'; }
-        if (next.connected) {
-          // Older OBS versions reject this request when Replay Buffer is disabled in the profile.
-          const buffer = await requestObs('GetReplayBufferStatus').catch(() => null);
-          next.bufferAvailable = Boolean(buffer);
-          next.bufferActive = buffer?.outputActive === true;
-          if (!buffer) next.error = 'В OBS включите буфер повтора в разделе «Настройки → Вывод».';
+      const next = { connected: false, bufferActive: false, running, installed: Boolean(obsExe || running), scenesReady, profileReady: Boolean(profile?.ready) };
+      try {
+        const scene = await requestObs('GetSceneList');
+        next.connected = true;
+        next.running = true;
+        next.installed = true;
+        next.currentScene = scene.currentProgramSceneName ?? scene.sceneName;
+        next.availableScenes = scene.scenes?.map(item => item.sceneName) ?? [];
+      } catch (error) {
+        if (running !== false || error.code !== 'OBS_UNREACHABLE') {
+          next.connectionError = error.code?.startsWith('OBS_') ? error.message
+            : `Не удалось подключиться к OBS на порту ${settings.obsPort}. Проверьте настройки WebSocket.`;
         }
+      }
+      if (next.connected) {
+        // Older OBS versions reject this request when Replay Buffer is disabled in the profile.
+        const buffer = await requestObs('GetReplayBufferStatus').catch(() => null);
+        next.bufferAvailable = Boolean(buffer);
+        next.bufferActive = buffer?.outputActive === true;
+        if (!buffer) next.error = 'В OBS включите буфер повтора в разделе «Настройки → Вывод».';
       }
       obsState = next;
       lastProbe = Date.now();
@@ -104,7 +113,7 @@ async function openCommentator(overlay) {
         hasObsPassword: Boolean(settings.obsSecret), cs2Path: settings.cs2Path, obsCollection: collectionName() },
       service: status,
       obs: { ...obsStatus, replayEnabled: Boolean(status.obs?.enabled), replayPlaying: Boolean(status.obs?.playing),
-        error: status.obs?.error || obsStatus.error },
+        error: obsStatus.connectionError || status.obs?.error || obsStatus.error },
       hud: { running: overlay.isEnabled() }, cs2: { configured: Boolean(configured), detectedPath }, paths: { runtime },
     };
   }
@@ -145,8 +154,13 @@ async function openCommentator(overlay) {
         throw cause;
       }
     }
+    return applySettings(next);
+  }
+
+  async function applySettings(next) {
     if (JSON.stringify(next) === JSON.stringify(settings)) return { message: 'Настройки уже сохранены.' };
     const restart = ['siteUrl', 'publishSecret', 'obsPort', 'obsSecret'].some(key => next[key] !== settings[key]);
+    await obsProbe?.catch(() => {});
     writeJson(settingsFile, next);
     settings = next;
     obs?.close();
@@ -170,9 +184,9 @@ async function openCommentator(overlay) {
   }
 
   async function launchObs() {
+    if (await setup.obsRunning()) return { message: 'OBS уже открыт.' };
     if (!obsExe) obsExe = setup.findObs();
     if (!obsExe) throw new Error('Сначала установите OBS Studio.');
-    if (await setup.obsRunning()) return { message: 'OBS уже открыт.' };
     const collections = await setup.findObsCollections();
     const name = collectionName();
     const collection = collections.find(item => item.templateName === name && item.name === name)
@@ -277,6 +291,19 @@ async function openCommentator(overlay) {
       if (result.running) throw new Error('Закройте OBS и повторите подготовку сцен.');
       lastProbe = 0;
       return { message: 'Коллекции DUO CUP подготовлены. Запустите OBS из приложения.' };
+    },
+    async useLocalObsSettings() {
+      const { port, password } = await obsSetup.readLocalObsWebSocket();
+      const candidate = createObsConnection({ port, password }, () => {});
+      try { await candidate.request('GetSceneList'); }
+      finally { candidate.close(); }
+      const alreadySaved = port === settings.obsPort && hasObsPassword(password);
+      const result = await applySettings({ ...settings, obsPort: port,
+        obsSecret: alreadySaved ? settings.obsSecret : protect(password) });
+      lastProbe = 0;
+      const status = await probeObs();
+      if (!status.connected) return { message: `${result.message} ${status.connectionError ?? 'Откройте OBS и проверьте связь.'}`, tone: 'warning' };
+      return { message: `OBS подключён на порту ${port}. ${result.message}` };
     },
     async toggleHud() { overlay.toggle(); return { message: overlay.isEnabled() ? 'HUD включён.' : 'HUD скрыт.' }; },
     async openControl() {

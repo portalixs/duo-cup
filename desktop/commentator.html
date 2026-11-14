@@ -119,7 +119,9 @@
         </section>
         <section class="surface form-card" aria-labelledby="obs-title">
           <h2 id="obs-title">OBS WebSocket</h2>
-          <p>В OBS откройте Инструменты → Настройки сервера WebSocket и включите сервер.</p>
+          <p>В OBS откройте «Инструменты → Настройки сервера WebSocket» и включите сервер. Пульт может взять порт и пароль из настроек локального OBS.</p>
+          <div class="form-actions"><button type="button" class="button" data-action="useLocalObsSettings" disabled>Подключить локальный OBS</button></div>
+          <p id="obs-connection-hint" aria-live="polite"></p>
           <label for="obs-port">Порт WebSocket</label>
           <input type="number" id="obs-port" min="1" max="65535" value="4455" required>
           <label for="obs-password">Пароль WebSocket</label>
