@@ -6,14 +6,32 @@ const matchScene = '02 · Матч CS2';
 const replayScene = '05 · Повтор';
 const media = { inputName: 'DUO CUP · клип повтора' };
 const activePhases = new Set(['live', 'bomb', 'defuse']);
-const handoffLimit = 2200;
-const playLimit = 6200;
+const handoffLimit = 5100;
+const slowPercent = 50;
+const saveTailMs = 760;
+const leadMs = 940;
+const minimumLeadMs = 530;
+const visibleTailMs = 550;
+const freezeOverlapMs = 4400;
+const statusPollMs = 40;
+const mediaAction = action => `OBS_WEBSOCKET_MEDIA_INPUT_ACTION_${action}`;
+
+function clipWindow(duration, candidate, capture, returnedAt) {
+  const afterFrag = capture.at - candidate.at;
+  if (afterFrag < 580 || !Number.isFinite(duration) || duration <= afterFrag + minimumLeadMs) return null;
+  const frag = duration - afterFrag;
+  const first = Math.max(0, frag - leadMs, frag + returnedAt + 150 - candidate.at);
+  const lastStart = frag - minimumLeadMs;
+  if (first > lastStart) return null;
+  return { first, lastStart, last: frag + visibleTailMs };
+}
 
 export function createObsReplay(config, connect = createObsConnection) {
   const selector = createReplaySelector();
   const captures = new Map();
   let enabled = false;
   let latest;
+  let freezeAt;
   let data;
   let awaitingReplay;
   let showing;
@@ -48,11 +66,12 @@ export function createObsReplay(config, connect = createObsConnection) {
   }
 
   async function save(candidate, version) {
-    if (!enabled || version !== generation || showing || candidate.at <= returnedAt + 400 || Date.now() - candidate.at > 1100) return null;
+    if (!enabled || version !== generation || showing?.switched || candidate.at <= returnedAt + 400 || Date.now() - candidate.at > 1100) return null;
     if (!(await request('GetReplayBufferStatus')).outputActive || await scene() !== matchScene) return null;
-    // The observed frag arrives via GSI. Leave a short tail for encoder frames already queued in OBS.
-    await wait(Math.max(0, candidate.at + 280 - Date.now()));
-    if (!enabled || version !== generation || showing || !sameMap(latest, candidate) || Date.now() - candidate.at > 1200) return null;
+    // Allow the kill and its aftermath through the capture and encoder before saving.
+    await wait(Math.max(0, candidate.at + saveTailMs - Date.now()));
+    if (!enabled || version !== generation || showing?.switched || !sameMap(latest, candidate)
+      || Date.now() - candidate.at > 1450 || await scene() !== matchScene) return null;
     const at = Date.now();
     let timer;
     try {
@@ -62,7 +81,7 @@ export function createObsReplay(config, connect = createObsConnection) {
       });
       await request('SaveReplayBuffer');
       const path = await file;
-      return path ? { path, at, candidate } : null;
+      return path ? { path, at } : null;
     } finally {
       clearTimeout(timer);
       pendingSave = null;
@@ -90,19 +109,77 @@ export function createObsReplay(config, connect = createObsConnection) {
     return !activePhases.has(latest.phase) || latest.round <= round.round;
   }
 
+  function airUntil(round) {
+    if (latest.phase !== 'freezetime' || latest.round <= round.round) return Infinity;
+    return Math.min(freezeAt + freezeOverlapMs, Number.isFinite(latest.clockEnd) ? latest.clockEnd : Infinity);
+  }
+
+  function preloading(run) {
+    return !run.cancelled && canAir(run.round) && Date.now() - run.round.at < handoffLimit;
+  }
+
+  function playback(action) {
+    return request('TriggerMediaInputAction', { ...media, mediaAction: mediaAction(action) });
+  }
+
+  async function prepareClip(run, candidate, capture) {
+    await request('SetInputMute', { ...media, inputMuted: true });
+    await request('SetInputSettings', { ...media, inputSettings: {
+      local_file: capture.path, is_local_file: true, speed_percent: slowPercent,
+      restart_on_activate: false, close_when_inactive: false, clear_on_media_end: false, looping: false,
+    }, overlay: true });
+
+    let window;
+    const loadingUntil = Date.now() + 800;
+    while (preloading(run) && Date.now() < loadingUntil) {
+      const status = await request('GetMediaInputStatus', media, 600);
+      if (status.mediaState === 'OBS_MEDIA_STATE_ERROR') return null;
+      if (status.mediaState === 'OBS_MEDIA_STATE_PLAYING' && status.mediaDuration > 0) {
+        window = clipWindow(status.mediaDuration, candidate, capture, returnedAt);
+        break;
+      }
+      await wait(statusPollMs);
+    }
+    if (!window || !preloading(run)) return null;
+
+    // OBS seeks to the preceding keyframe. Play off air through any excess lead-in.
+    if (window.first > 0) await request('SetMediaInputCursor', { ...media, mediaCursor: Math.floor(window.lastStart) }, 850);
+    while (preloading(run)) {
+      const status = await request('GetMediaInputStatus', media, 600);
+      if (status.mediaState !== 'OBS_MEDIA_STATE_PLAYING' || status.mediaCursor > window.lastStart + 45) return null;
+      if (status.mediaCursor >= window.first - 30) {
+        await playback('PAUSE');
+        const pauseUntil = Date.now() + 240;
+        while (preloading(run) && Date.now() < pauseUntil) {
+          const paused = await request('GetMediaInputStatus', media, 600);
+          if (paused.mediaCursor > window.lastStart + 65) return null;
+          if (paused.mediaState === 'OBS_MEDIA_STATE_PAUSED' && paused.mediaCursor >= window.first - 35) {
+            return { duration: (window.last - paused.mediaCursor) * 100 / slowPercent };
+          }
+          await wait(statusPollMs);
+        }
+        return null;
+      }
+      await wait(statusPollMs);
+    }
+    return null;
+  }
+
   async function finish(run) {
     if (showing !== run || run.finishing) return;
     run.finishing = true;
     run.cancelled = true;
-    data = null;
     clearTimeout(run.timer);
-    clearTimeout(run.freezeTimer);
     try {
       if (run.switchRequest) await run.switchRequest.catch(() => {});
       if (run.switched && await scene() === replayScene) {
+        if (run.started) await playback('PAUSE').catch(() => {});
         await request('SetCurrentProgramScene', { sceneName: matchScene });
         returnedAt = Date.now();
+        // Keep the replay caption and last frame in the outgoing scene under the wipe.
+        await wait(run.transitionMs);
       }
+      if (run.prepared) await playback('STOP').catch(() => {});
     } catch (error) {
       warn(error);
       if (!run.retried) {
@@ -112,72 +189,62 @@ export function createObsReplay(config, connect = createObsConnection) {
         return;
       }
     }
-    if (showing === run) showing = null;
+    if (showing === run) {
+      data = null;
+      showing = null;
+    }
   }
 
   async function play(round) {
     if (showing || !canAir(round) || Date.now() < nextConnectionAttempt) return;
     const matches = round.candidates.map(candidate => [candidate, captures.get(candidate.id)]).filter(([, clip]) => clip);
     if (!matches.length) return;
-    let selected;
-    for (const [candidate, pending] of matches) {
-      const capture = await pending;
-      if (!canAir(round) || Date.now() - round.at > handoffLimit) return;
-      if (capture) {
-        selected = { candidate, capture };
-        break;
-      }
-    }
-    if (!selected || showing) return;
-    const { candidate, capture } = selected;
-    const run = { round, switched: false, started: false, cancelled: false };
+    const run = { round, switched: false, started: false, cancelled: false, transitionMs: 0 };
     showing = run;
     try {
       if (await scene() !== matchScene) return;
-      await request('SetInputSettings', { ...media, inputSettings: { local_file: capture.path }, overlay: true });
-      await request('SetInputMute', { ...media, inputMuted: true });
-      if (run.cancelled || !canAir(round) || await scene() !== matchScene || Date.now() - round.at > handoffLimit) return;
-      data = { title: candidate.title, name: candidate.name, round: candidate.round, loading: true };
-      await wait(Math.max(140, round.at + 450 - Date.now()));
-      if (run.cancelled || !canAir(round) || await scene() !== matchScene || Date.now() - round.at > handoffLimit) return;
-      run.switched = true;
-      run.switchRequest = request('SetCurrentProgramScene', { sceneName: replayScene });
-      await run.switchRequest;
-      if (run.cancelled) return;
-      run.timer = setTimeout(() => { void finish(run); }, playLimit);
-      let status;
-      const readyBy = Date.now() + 950;
-      do {
-        status = await request('GetMediaInputStatus', media, 600);
-        if (status.mediaDuration > 0 && status.mediaState === 'OBS_MEDIA_STATE_PLAYING') break;
-        await wait(55);
-      } while (!run.cancelled && Date.now() < readyBy);
-      if (run.cancelled || !canAir(round) || status.mediaState !== 'OBS_MEDIA_STATE_PLAYING' || status.mediaDuration <= 0) return;
-      const startAt = Math.max(candidate.startAt - 1150, returnedAt + 150);
-      const duration = Math.min(playLimit, capture.at - startAt);
-      const cursor = Math.max(0, status.mediaDuration - duration);
-      if (cursor > 0) {
-        await request('SetMediaInputCursor', { ...media, mediaCursor: cursor }, 850);
-        await wait(80);
+      const transition = await request('GetCurrentSceneTransition').catch(() => ({}));
+      const stinger = transition.transitionKind === 'obs_stinger_transition';
+      const cutMs = stinger && Number.isSafeInteger(transition.transitionSettings?.transition_point)
+        && transition.transitionSettings?.tp_type === 0 ? Math.min(1500, transition.transitionSettings.transition_point) : stinger ? 425 : 0;
+      run.transitionMs = stinger ? Math.max(870, cutMs + 450) : Math.min(1000, transition.transitionDuration ?? 0);
+
+      for (const [candidate, pending] of matches) {
+        const capture = await pending;
+        if (!preloading(run) || await scene() !== matchScene) return;
+        if (!capture) continue;
+        run.prepared = true;
+        const clip = await prepareClip(run, candidate, capture);
+        if (!clip) continue;
+        if (!preloading(run) || await scene() !== matchScene) return;
+        if (Date.now() + cutMs + clip.duration + run.transitionMs > airUntil(round)) continue;
+
+        data = { title: candidate.title, name: candidate.name, round: candidate.round, speed: slowPercent, loading: false };
+        run.switched = true;
+        const switchedAt = Date.now();
+        run.switchRequest = request('SetCurrentProgramScene', { sceneName: replayScene });
+        await run.switchRequest;
+        await wait(Math.max(0, switchedAt + cutMs - Date.now()));
+        if (run.cancelled || !canAir(round)) return;
+        await playback('PLAY');
+        if (run.cancelled) return;
+        run.started = true;
+        run.timer = setTimeout(() => { void finish(run); }, clip.duration);
+        return;
       }
-      if (run.cancelled) return;
-      run.started = true;
-      data = { ...data, loading: false };
-      if (latest.phase === 'freezetime' && latest.round > round.round) timeNextRound(run);
     } finally {
       if (!run.started) await finish(run);
     }
   }
 
-  function timeNextRound(run) {
-    run.freezeTimer ??= setTimeout(() => { void finish(run); }, 2200);
-  }
-
   function ingest(game) {
+    if (game.phase === 'freezetime' && (latest?.phase !== game.phase || latest.round !== game.round || !sameMap(latest, game))) {
+      freezeAt = Date.now();
+    }
     latest = game;
     if (showing) {
       if (!canAir(showing.round)) void finish(showing);
-      else if (game.phase === 'freezetime' && game.round > showing.round.round) timeNextRound(showing);
+      else if (showing.started && Date.now() + showing.transitionMs >= airUntil(showing.round)) void finish(showing);
     }
     if (!enabled) return;
     const { capture: candidate, roundEnd } = selector.ingest(game);

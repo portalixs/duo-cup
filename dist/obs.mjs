@@ -558,7 +558,8 @@ function render(state) {
     el('replay-moment').hidden = !replay;
     if (replay) {
       setText(el('replay-title'), replay.title);
-      setText(el('replay-player'), `${replay.name} · Раунд ${replay.round}`);
+      const speed = replay.speed === 50 ? ' · 0,5×' : '';
+      setText(el('replay-player'), `${replay.name} · Раунд ${replay.round}${speed}`);
     }
     return;
   }

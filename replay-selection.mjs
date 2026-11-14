@@ -87,7 +87,7 @@ export function createReplaySelector() {
       round.frags.push({ ...frag, clutch, pov });
 
       const candidate = {
-        id: frag.id, at: frag.at, startAt: recent[0]?.at ?? frag.at,
+        id: frag.id, at: frag.at,
         matchId, mapId, round: round.number, name: frag.name, side: frag.side, count, clutch,
         title: count > 1 ? `${count} ${count < 5 ? 'фрага' : 'фрагов'}` : headshot ? 'Хедшот' : 'Фраг',
         priority: count * 20 + (headshot ? 3 : 0),
