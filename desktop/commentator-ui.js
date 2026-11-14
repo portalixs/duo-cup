@@ -125,9 +125,13 @@ function render() {
   obsButton.dataset.action = obs.installed ? 'launchObs' : 'installObs';
   obsButton.textContent = obs.installed ? 'Открыть OBS' : 'Установить OBS';
 
-  status('site-tone', settings.siteUrl && settings.hasPublishKey ? 'Настроен' : 'Локально', settings.siteUrl && settings.hasPublishKey ? 'good' : 'idle');
+  const siteConnected = service.publishStatus === 'Сайт синхронизирован';
+  const siteMissingKey = settings.siteUrl && !settings.hasPublishKey;
+  const siteRejected = service.publishStatus?.includes('Неверный ключ наблюдателя');
+  status('site-tone', siteConnected ? 'Подключён' : siteRejected ? 'Ключ отклонён' : siteMissingKey ? 'Нужен ключ' : settings.siteUrl ? 'Ожидание' : 'Локально',
+    siteConnected ? 'good' : siteRejected || siteMissingKey ? 'warning' : 'idle');
   element('site-state').textContent = !settings.siteUrl ? 'Локальная проверка без сайта.'
-    : service.publishStatus || settings.siteUrl;
+    : siteMissingKey ? 'Укажите ключ publish с сервера турнира.' : service.publishStatus || settings.siteUrl;
   element('scenes-hint').textContent = obs.connected ? 'Выбранная сцена сразу появится в программе OBS.' : 'Для переключения сцен подключите OBS WebSocket.';
   element('hud-state').textContent = hud.running ? 'HUD включён. Сочетание Ctrl+Shift+F10 управляет видимостью.' : 'Графика поверх окна игры на экране наблюдателя.';
   element('hud-toggle').textContent = hud.running ? 'Закрыть HUD' : 'Запустить HUD';
@@ -162,7 +166,7 @@ function render() {
     } else {
       permitted = {
         launchBroadcast: obs.installed && !service.occupied && !externalService && !service.restartRequired,
-          startService: !service.running && !service.occupied, stopService: service.owned, openControl: service.running,
+          startService: !service.running && !service.occupied, stopService: service.owned, openControl: true,
           launchCs2: true, launchObs: obs.installed, installObs: true, toggleHud: hud.running || service.running,
         replayEnable: appControl && obs.connected && obs.bufferActive, replayDisable: appControl,
           startReplayBuffer: obs.connected && !obs.bufferActive, knife: appControl && Boolean(service.active) && mayKnife && !obs.replayPlaying,

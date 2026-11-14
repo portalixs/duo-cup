@@ -8,6 +8,7 @@ const setup = require('./commentator-setup.cjs');
 
 const collectionDefault = 'DUO CUP · CS2';
 const collection4k = 'DUO CUP · CS2 4K';
+const tournamentSite = 'https://cup.inf54.ru';
 const sceneNames = {
   sceneStandby: '01 · Ожидание и перерыв', sceneMatch: '02 · Матч CS2',
   sceneWait: '03 · Ожидание матча', sceneChange: '04 · Смена карты',
@@ -20,7 +21,7 @@ async function openCommentator(overlay) {
   const obsDir = join(payload, 'obs');
   const service = createService({ runtime, payload });
   const { createObsConnection } = await import(pathToFileURL(join(payload, 'obs-websocket.mjs')).href);
-  const defaults = { siteUrl: '', publishSecret: '', obsPort: 4455, obsSecret: '', obsCollection: collectionDefault, cs2Path: '' };
+  const defaults = { siteUrl: tournamentSite, publishSecret: '', obsPort: 4455, obsSecret: '', obsCollection: collectionDefault, cs2Path: '' };
   let settings = { ...defaults, ...readJson(settingsFile, {}) };
   let detectedPath;
   let obsExe;
@@ -100,7 +101,7 @@ async function openCommentator(overlay) {
   }
 
   async function saveSettings(form) {
-    const siteUrl = String(form.siteUrl ?? '').trim();
+    let siteUrl = String(form.siteUrl ?? '').trim();
     if (siteUrl) {
       let url;
       try { url = new URL(siteUrl); } catch { throw new Error('Укажите полный адрес сайта, например https://cup.inf54.ru.'); }
@@ -109,6 +110,7 @@ async function openCommentator(overlay) {
           || !(url.protocol === 'https:' || (local && url.protocol === 'http:'))) {
         throw new Error('Укажите адрес сайта HTTPS без пути. Для локального туннеля допустим HTTP.');
       }
+      siteUrl = url.origin;
     }
     const publishKey = String(form.publishKey ?? '').trim();
     if (publishKey && !/^[a-f0-9]{48,64}$/.test(publishKey)) throw new Error('Скопируйте ключ publish из настроек сервера.');
@@ -117,11 +119,23 @@ async function openCommentator(overlay) {
     const chosen = String(form.cs2Path ?? '').trim();
     const cs2Path = chosen ? setup.normalizeCs2Path(chosen) : '';
     if (chosen && !cs2Path) throw new Error('Выберите папку установленной CS2 или её папку game/csgo/cfg.');
+    const previousOrigin = settings.siteUrl ? new URL(settings.siteUrl).origin : '';
     const next = { ...settings, siteUrl, obsPort, cs2Path, obsCollection: form.obsCollection === collection4k ? collection4k : collectionDefault,
-      publishSecret: form.clearPublishKey ? '' : publishKey ? protect(publishKey) : settings.publishSecret,
+      publishSecret: form.clearPublishKey ? '' : publishKey ? protect(publishKey) : previousOrigin === siteUrl ? settings.publishSecret : '',
       obsSecret: form.clearObsPassword ? '' : form.obsPassword ? protect(String(form.obsPassword)) : settings.obsSecret,
     };
-    if (siteUrl && !next.publishSecret) throw new Error('Для связи с сайтом нужен серверный ключ publish.');
+    if (siteUrl && publishKey && !form.clearPublishKey) {
+      try {
+        const response = await fetch(new URL('/api/bridge', siteUrl), {
+          headers: { Authorization: `Bearer ${publishKey}` }, redirect: 'error', signal: AbortSignal.timeout(3500),
+        });
+        if (response.status === 401 || response.status === 403) throw new Error('Сервер отклонил ключ наблюдателя. Нужен ключ publish именно этого сервера.');
+        if (!response.ok) throw new Error(`Сервер не принял проверку ключа (HTTP ${response.status}).`);
+      } catch (cause) {
+        if (cause.name === 'TimeoutError' || cause instanceof TypeError) throw new Error('Связь с сайтом недоступна. Проверьте адрес и повторите сохранение.');
+        throw cause;
+      }
+    }
     if (JSON.stringify(next) === JSON.stringify(settings)) return { message: 'Настройки уже сохранены.' };
     const restart = ['siteUrl', 'publishSecret', 'obsPort', 'obsSecret'].some(key => next[key] !== settings[key]);
     writeJson(settingsFile, next);
@@ -208,7 +222,10 @@ async function openCommentator(overlay) {
       return { message: 'Коллекции DUO CUP подготовлены. Запустите OBS из приложения.' };
     },
     async toggleHud() { overlay.toggle(); return { message: overlay.isEnabled() ? 'HUD включён.' : 'HUD скрыт.' }; },
-    async openControl() { await shell.openExternal(service.base + '/control'); return {}; },
+    async openControl() {
+      await shell.openExternal(new URL('/control', settings.siteUrl || tournamentSite).href);
+      return {};
+    },
     openRuntime: () => revealPath(runtime), openLogs: () => revealPath(service.logs),
     openObsScenes: () => revealPath(obsDir),
     async openObsGuide() { await shell.openExternal('https://github.com/portalixs/duo-cup/blob/main/README.md#автоповтор-в-конце-раунда'); return {}; },
