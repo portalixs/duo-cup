@@ -66,5 +66,5 @@ export function createObsConnection({ port = 4455, password = '' }, onEvent) {
     }
   }
 
-  return { request };
+  return { request, close: () => current?.socket.close() };
 }

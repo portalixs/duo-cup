@@ -3,10 +3,13 @@ const { getCs2Bounds, keepOverlayOnTop } = require('./cs2-window.cjs');
 
 const hudUrl = 'http://127.0.0.1:8787/obs?surface=desktop';
 const toggleShortcut = 'CommandOrControl+Shift+F10';
+const hudOnly = process.argv.includes('--hud-only');
 let overlay;
 let tray;
 let timer;
-let enabled = true;
+let commentator;
+let quitting = false;
+let enabled = hudOnly;
 let loaded = false;
 let loading = false;
 let refreshRequested = false;
@@ -70,6 +73,7 @@ function toggleOverlay() {
 
 function updateTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
+    ...(!hudOnly ? [{ label: 'Панель комментатора', click: () => commentator?.show() }] : []),
     { label: 'Показывать HUD в CS2', type: 'checkbox', checked: enabled, click: toggleOverlay },
     { label: 'Обновить HUD', click: refreshOverlay },
     { label: 'Выход', click: () => app.quit() },
@@ -93,18 +97,35 @@ async function start() {
   overlay.on('closed', () => app.quit());
 
   tray = new Tray(await app.getFileIcon(process.execPath));
+  tray.on('double-click', () => commentator?.show());
   tray.setToolTip('DUO CUP · HUD CS2');
   updateTrayMenu();
   if (!globalShortcut.register(toggleShortcut, toggleOverlay)) console.log('Горячая клавиша занята. Переключатель доступен в трее.');
   updateOverlay();
   timer = setInterval(updateOverlay, 200);
+  if (!hudOnly) {
+    const { openCommentator } = require('./commentator-main.cjs');
+    commentator = await openCommentator({ isEnabled: () => enabled, toggle: toggleOverlay });
+  }
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', refreshOverlay);
+  app.on('second-instance', (_event, argv) => {
+    if (argv.includes('--hud-only')) {
+      if (!enabled) toggleOverlay();
+      refreshOverlay();
+    } else if (commentator) commentator.show();
+    else refreshOverlay();
+  });
   app.whenReady().then(start).catch(cause => { console.error(cause); app.exit(1); });
 }
+app.on('before-quit', event => {
+  if (!commentator || quitting) return;
+  event.preventDefault();
+  quitting = true;
+  void commentator.shutdown().finally(() => app.quit());
+});
 app.on('will-quit', () => {
   clearInterval(timer);
   globalShortcut.unregisterAll();

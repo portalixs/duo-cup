@@ -7,5 +7,5 @@ if not exist "node_modules\.bin\electron.cmd" (
         exit /b 1
     )
 )
-call npm start
+call npm run hud
 if errorlevel 1 pause

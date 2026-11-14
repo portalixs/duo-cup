@@ -1,0 +1,277 @@
+const { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { existsSync } = require('node:fs');
+const { spawn } = require('node:child_process');
+const { dirname, join } = require('node:path');
+const { pathToFileURL } = require('node:url');
+const { createService, readJson, writeJson } = require('./commentator-service.cjs');
+const setup = require('./commentator-setup.cjs');
+
+const collectionDefault = 'DUO CUP · CS2';
+const collection4k = 'DUO CUP · CS2 4K';
+const sceneNames = {
+  sceneStandby: '01 · Ожидание и перерыв', sceneMatch: '02 · Матч CS2',
+  sceneWait: '03 · Ожидание матча', sceneChange: '04 · Смена карты',
+};
+
+async function openCommentator(overlay) {
+  const payload = app.isPackaged ? join(process.resourcesPath, 'duo-cup') : join(__dirname, '..');
+  const runtime = join(app.getPath('userData'), 'runtime');
+  const settingsFile = join(runtime, 'commentator.json');
+  const obsDir = join(payload, 'obs');
+  const service = createService({ runtime, payload });
+  const { createObsConnection } = await import(pathToFileURL(join(payload, 'obs-websocket.mjs')).href);
+  const defaults = { siteUrl: '', publishSecret: '', obsPort: 4455, obsSecret: '', obsCollection: collectionDefault, cs2Path: '' };
+  let settings = { ...defaults, ...readJson(settingsFile, {}) };
+  let detectedPath;
+  let obsExe;
+  let obs;
+  let lastProbe = 0;
+  let obsState = {};
+  let obsProbe;
+  let installer;
+  let busy = false;
+
+  const reveal = value => value ? safeStorage.decryptString(Buffer.from(value, 'base64')) : '';
+  function protect(value) {
+    if (!value) return '';
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows не удалось защитить ключи профиля.');
+    return safeStorage.encryptString(value).toString('base64');
+  }
+
+  function serviceOptions() {
+    return {
+      publication: settings.siteUrl && settings.publishSecret ? { url: settings.siteUrl, key: reveal(settings.publishSecret) } : null,
+      obs: { port: settings.obsPort, password: reveal(settings.obsSecret) },
+    };
+  }
+
+  function refreshLocations() {
+    detectedPath = setup.findCs2();
+    obsExe = setup.findObs();
+  }
+
+  async function requestObs(type, fields) {
+    obs ??= createObsConnection(serviceOptions().obs, () => {});
+    return obs.request(type, fields, 950);
+  }
+
+  function collectionName() {
+    return settings.obsCollection === collection4k ? collection4k : collectionDefault;
+  }
+
+  async function probeObs() {
+    if (obsProbe) return obsProbe;
+    if (Date.now() - lastProbe < 3000) return obsState;
+    obsProbe = (async () => {
+      if (!obsExe) obsExe = setup.findObs();
+      const collections = await setup.findObsCollections();
+      const scenesReady = collections.some(item => item.templateName === collectionName());
+      const running = obsExe ? await setup.obsRunning().catch(() => null) : false;
+      const next = { connected: false, bufferActive: false, running, installed: Boolean(obsExe), scenesReady };
+      if (running) {
+        try {
+          const [buffer, scene] = await Promise.all([requestObs('GetReplayBufferStatus'), requestObs('GetCurrentProgramScene')]);
+          next.connected = true;
+          next.bufferActive = buffer.outputActive;
+          next.currentScene = scene.currentProgramSceneName ?? scene.sceneName;
+        } catch { next.error = 'В OBS включите WebSocket и проверьте порт и пароль.'; }
+      }
+      obsState = next;
+      lastProbe = Date.now();
+      return obsState;
+    })();
+    try { return await obsProbe; }
+    finally { obsProbe = null; }
+  }
+
+  async function getStatus() {
+    const [status, obsStatus] = await Promise.all([service.getStatus(), probeObs()]);
+    const cfgDir = settings.cs2Path || detectedPath;
+    const generated = join(runtime, 'gamestate_integration_duocup.cfg');
+    const configured = cfgDir && setup.hasCurrentGameConfig(cfgDir, generated, join(obsDir, 'duocup_match_hud.cfg'));
+    return {
+      settings: { siteUrl: settings.siteUrl, hasPublishKey: Boolean(settings.publishSecret), obsPort: settings.obsPort,
+        hasObsPassword: Boolean(settings.obsSecret), cs2Path: settings.cs2Path, obsCollection: collectionName() },
+      service: status,
+      obs: { ...obsStatus, replayEnabled: Boolean(status.obs?.enabled), replayPlaying: Boolean(status.obs?.playing),
+        error: status.obs?.error || obsStatus.error },
+      hud: { running: overlay.isEnabled() }, cs2: { configured: Boolean(configured), detectedPath }, paths: { runtime },
+    };
+  }
+
+  async function saveSettings(form) {
+    const siteUrl = String(form.siteUrl ?? '').trim();
+    if (siteUrl) {
+      let url;
+      try { url = new URL(siteUrl); } catch { throw new Error('Укажите полный адрес сайта, например https://cup.inf54.ru.'); }
+      const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
+      if (url.username || url.password || url.pathname !== '/' || url.search || url.hash || url.port === '123'
+          || !(url.protocol === 'https:' || (local && url.protocol === 'http:'))) {
+        throw new Error('Укажите адрес сайта HTTPS без пути. Для локального туннеля допустим HTTP.');
+      }
+    }
+    const publishKey = String(form.publishKey ?? '').trim();
+    if (publishKey && !/^[a-f0-9]{48,64}$/.test(publishKey)) throw new Error('Скопируйте ключ publish из настроек сервера.');
+    const obsPort = Number(form.obsPort);
+    if (!Number.isInteger(obsPort) || obsPort < 1 || obsPort > 65535) throw new Error('Порт OBS должен быть числом от 1 до 65535.');
+    const chosen = String(form.cs2Path ?? '').trim();
+    const cs2Path = chosen ? setup.normalizeCs2Path(chosen) : '';
+    if (chosen && !cs2Path) throw new Error('Выберите папку установленной CS2 или её папку game/csgo/cfg.');
+    const next = { ...settings, siteUrl, obsPort, cs2Path, obsCollection: form.obsCollection === collection4k ? collection4k : collectionDefault,
+      publishSecret: form.clearPublishKey ? '' : publishKey ? protect(publishKey) : settings.publishSecret,
+      obsSecret: form.clearObsPassword ? '' : form.obsPassword ? protect(String(form.obsPassword)) : settings.obsSecret,
+    };
+    if (siteUrl && !next.publishSecret) throw new Error('Для связи с сайтом нужен серверный ключ publish.');
+    if (JSON.stringify(next) === JSON.stringify(settings)) return { message: 'Настройки уже сохранены.' };
+    const restart = ['siteUrl', 'publishSecret', 'obsPort', 'obsSecret'].some(key => next[key] !== settings[key]);
+    writeJson(settingsFile, next);
+    settings = next;
+    obs?.close();
+    obs = undefined;
+    lastProbe = 0;
+    if (restart && service.ownsProcess()) {
+      await service.stop();
+      await service.start(serviceOptions());
+      return { message: 'Настройки сохранены, служба перезапущена. При необходимости снова включите автоповтор.' };
+    }
+    if (restart && (await service.getStatus()).running) service.markRestart();
+    return { message: 'Настройки сохранены.' };
+  }
+
+  function execute(exe, args, options = {}) {
+    return new Promise((resolve, reject) => {
+      const process = spawn(exe, args, { windowsHide: true, detached: true, stdio: 'ignore', ...options });
+      process.once('error', reject);
+      process.once('spawn', () => { process.unref(); resolve(process); });
+    });
+  }
+
+  async function launchObs() {
+    if (!obsExe) obsExe = setup.findObs();
+    if (!obsExe) throw new Error('Сначала установите OBS Studio.');
+    if (await setup.obsRunning()) return { message: 'OBS уже открыт.' };
+    const collections = await setup.findObsCollections();
+    const name = collectionName();
+    const collection = collections.find(item => item.templateName === name && item.name === name)
+      ?? collections.find(item => item.templateName === name);
+    await execute(obsExe, collection ? ['--collection', collection.name] : [], { cwd: dirname(obsExe) });
+    lastProbe = 0;
+    return { message: collection ? `OBS запущен с коллекцией «${collection.name}».` : 'OBS запущен. Подготовьте сцены DUO CUP для своей коллекции.' };
+  }
+
+  async function revealPath(path) {
+    const error = await shell.openPath(path);
+    if (error) throw new Error('Не удалось открыть выбранный файл или папку.');
+    return {};
+  }
+
+  const actions = {
+    startService: () => service.start(serviceOptions()), stopService: service.stop,
+    async launchBroadcast() {
+      if (!obsExe || !(settings.cs2Path || detectedPath)) throw new Error('Сначала установите OBS и выберите папку CS2.');
+      const current = await service.getStatus();
+      if (current.running && !current.owned) throw new Error('Закройте старое окно start.cmd и повторите запуск.');
+      if (!current.running) await service.start(serviceOptions());
+      await launchObs();
+      await shell.openExternal('steam://rungameid/730');
+      return { message: 'Служба запущена. OBS и CS2 можно проверить перед трансляцией.' };
+    },
+    async installCs2() {
+      const cfgDir = settings.cs2Path || detectedPath;
+      if (!cfgDir) throw new Error('Выберите папку установки CS2.');
+      if (!service.ownsProcess()) throw new Error('Запустите службу DUO CUP из приложения.');
+      const result = await setup.installGameConfigs({ cfgDir, generatedCfg: join(runtime, 'gamestate_integration_duocup.cfg'),
+        hudCfg: join(obsDir, 'duocup_match_hud.cfg') });
+      return { message: `Конфиги CS2 установлены. ${result.backups.length ? 'Старые файлы сохранены рядом. ' : ''}Перезапустите CS2.` };
+    },
+    async launchCs2() { await shell.openExternal('steam://rungameid/730'); return { message: 'Команда запуска отправлена в Steam.' }; },
+    launchObs,
+    async installObs() {
+      if (installer) return { message: 'Установщик OBS уже запущен.' };
+      const script = app.isPackaged ? join(payload, 'obs-install.ps1') : join(__dirname, 'installer', 'obs-install.ps1');
+      if (!existsSync(script)) return shell.openExternal('https://obsproject.com/download');
+      const executable = join(process.env.SystemRoot || 'C:/Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+      installer = await execute(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script]);
+      installer.once('exit', code => {
+        installer = null;
+        obsExe = setup.findObs();
+        lastProbe = 0;
+        if (code && !obsExe) void dialog.showMessageBox({ type: 'warning', title: 'Установка OBS',
+          message: 'Установка OBS не завершилась. Запустите её снова или скачайте OBS на obsproject.com.' });
+      });
+      return { message: 'Скачивается проверенный установщик OBS. Дождитесь появления окна установки.' };
+    },
+    async setupObsScenes() {
+      const result = await setup.prepareObsCollections({ sourceDir: obsDir });
+      if (result.running) throw new Error('Закройте OBS и повторите подготовку сцен.');
+      lastProbe = 0;
+      return { message: 'Коллекции DUO CUP подготовлены. Запустите OBS из приложения.' };
+    },
+    async toggleHud() { overlay.toggle(); return { message: overlay.isEnabled() ? 'HUD включён.' : 'HUD скрыт.' }; },
+    async openControl() { await shell.openExternal(service.base + '/control'); return {}; },
+    openRuntime: () => revealPath(runtime), openLogs: () => revealPath(service.logs),
+    openObsScenes: () => revealPath(obsDir),
+    async openObsGuide() { await shell.openExternal('https://github.com/portalixs/duo-cup/blob/main/README.md#автоповтор-в-конце-раунда'); return {}; },
+    async startReplayBuffer() { await requestObs('StartReplayBuffer'); lastProbe = 0; return { message: 'Буфер повтора запущен.' }; },
+    async replayEnable() { await service.requestControl({ action: 'obs-replay', enabled: true }); return { message: 'Автоповтор включён.' }; },
+    async replayDisable() { await service.requestControl({ action: 'obs-replay', enabled: false }); return { message: 'Автоповтор выключен.' }; },
+    async knife() { await service.requestControl({ action: 'obs-knife' }); return { message: 'Плашка ножевого отправлена в HUD.' }; },
+  };
+  for (const [key, name] of Object.entries(sceneNames)) {
+    actions[key] = async () => {
+      await requestObs('SetCurrentProgramScene', { sceneName: name });
+      lastProbe = 0;
+      return { message: `В программе OBS — «${name}».` };
+    };
+  }
+
+  const page = new BrowserWindow({
+    title: 'DUO CUP · Комментаторы', width: 1180, height: 860, minWidth: 650, minHeight: 620,
+    show: false, backgroundColor: '#101522',
+    webPreferences: { preload: join(__dirname, 'commentator-preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+  page.setMenu(null);
+  page.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  page.webContents.on('will-navigate', event => event.preventDefault());
+  function handle(name, callback) {
+    ipcMain.handle('commentator:' + name, (event, ...args) => {
+      if (event.sender !== page.webContents || event.senderFrame !== page.webContents.mainFrame) throw new Error('Недоступно.');
+      return callback(...args);
+    });
+  }
+  async function run(operation) {
+    if (busy) throw new Error('Дождитесь завершения текущего действия.');
+    busy = true;
+    try { return await operation(); }
+    finally { busy = false; }
+  }
+  handle('status', getStatus);
+  handle('save', form => run(() => saveSettings(form)));
+  handle('action', action => run(() => {
+    if (!Object.hasOwn(actions, action)) throw new Error('Действие недоступно.');
+    return actions[action]();
+  }));
+  handle('choose-cs2', async () => {
+    const result = await dialog.showOpenDialog(page, { title: 'Папка Counter-Strike 2', properties: ['openDirectory'] });
+    if (result.canceled) return null;
+    const folder = setup.normalizeCs2Path(result.filePaths[0]);
+    if (!folder) throw new Error('В выбранной папке не найдена установленная CS2.');
+    return folder;
+  });
+  handle('copy', text => { if (typeof text === 'string' && text.length <= 2048) clipboard.writeText(text); });
+  refreshLocations();
+  page.once('ready-to-show', () => page.show());
+  page.on('close', event => { event.preventDefault(); page.hide(); });
+  await page.loadFile(join(__dirname, 'commentator.html'));
+  return {
+    show() { if (page.isMinimized()) page.restore(); page.show(); page.focus(); },
+    async shutdown() {
+      await service.stop().catch(() => {});
+      service.kill();
+      obs?.close();
+      page.destroy();
+    },
+  };
+}
+
+module.exports = { openCommentator };

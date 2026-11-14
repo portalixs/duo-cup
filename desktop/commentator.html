@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>DUO CUP · Комментатор</title>
+  <link rel="stylesheet" href="commentator.css">
+  <script src="commentator-ui.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wordmark" aria-label="DUO CUP"><span aria-hidden="true" class="mark"></span> DUO <b>CUP</b></div>
+    <nav class="nav" aria-label="Разделы приложения">
+      <button type="button" data-view="broadcast" aria-controls="broadcast" aria-current="page">Эфир</button>
+      <button type="button" data-view="setup" aria-controls="setup">Настройка</button>
+      <button type="button" data-view="help" aria-controls="help">Диагностика</button>
+    </nav>
+    <span id="top-status" class="status" data-tone="idle">Проверяем…</span>
+  </header>
+
+  <main class="shell">
+    <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+    <section id="broadcast" class="view" aria-labelledby="broadcast-title">
+      <header class="hero">
+        <div>
+          <h1 id="broadcast-title">Пульт комментатора</h1>
+          <p id="hero-detail">Проверяем службы трансляции.</p>
+        </div>
+        <div class="hero-actions">
+          <button type="button" class="button primary" data-action="launchBroadcast" disabled>Запустить эфирные программы</button>
+          <button type="button" id="service-control" class="button" data-action="startService" disabled>Запустить службу</button>
+          <button type="button" class="button" data-action="openControl" disabled>Открыть панель матча</button>
+        </div>
+      </header>
+
+      <div class="status-grid" aria-label="Подключения">
+        <article class="stat">
+          <div><h2>CS2</h2><span class="status" id="cs2-tone" data-tone="idle">Проверяем…</span></div>
+          <p id="cs2-state">Путь к игре и конфигурация HUD.</p>
+          <button type="button" class="text-button" data-action="launchCs2" disabled>Запустить CS2</button>
+        </article>
+        <article class="stat">
+          <div><h2>OBS Studio</h2><span class="status" id="obs-tone" data-tone="idle">Проверяем…</span></div>
+          <p id="obs-state">Подключение к OBS WebSocket.</p>
+          <button type="button" id="obs-launch" class="text-button" data-action="launchObs" disabled>Открыть OBS</button>
+        </article>
+        <article class="stat">
+          <div><h2>Сайт турнира</h2><span class="status" id="site-tone" data-tone="idle">Проверяем…</span></div>
+          <p id="site-state">Связь с панелью организатора.</p>
+          <button type="button" class="text-button" data-view="setup" data-focus="site-url">Настроить подключение</button>
+        </article>
+      </div>
+
+      <article class="surface scenes">
+        <div class="section-head">
+          <div><h2>Сцены OBS</h2><p id="scenes-hint">Сначала подключите OBS WebSocket.</p></div>
+          <button type="button" class="text-button" data-action="openObsScenes" disabled>Открыть файлы сцены</button>
+        </div>
+        <div class="scene-grid" aria-label="Выбор сцены OBS">
+          <button type="button" class="scene" data-action="sceneStandby" disabled><span class="scene-art slate" aria-hidden="true"></span><b>Заставка</b></button>
+          <button type="button" class="scene" data-action="sceneWait" disabled><span class="scene-art wait" aria-hidden="true"></span><b>Ожидание матча</b></button>
+          <button type="button" class="scene" data-action="sceneMatch" disabled><span class="scene-art match" aria-hidden="true"></span><b>Матч CS2</b></button>
+          <button type="button" class="scene" data-action="sceneChange" disabled><span class="scene-art change" aria-hidden="true"></span><b>Смена карты</b></button>
+        </div>
+      </article>
+
+      <div class="feature-grid">
+        <article class="surface feature">
+          <div><h2>HUD наблюдателя</h2><p id="hud-state">Показывает графику поверх окна игры.</p></div>
+          <button type="button" id="hud-toggle" class="button" data-action="toggleHud" disabled>Запустить HUD</button>
+        </article>
+        <article class="surface feature">
+          <div><h2>Автоповтор</h2><p id="replay-state">Подключите OBS и запустите буфер повтора.</p></div>
+          <div class="feature-actions">
+            <button type="button" id="replay-toggle" class="button" data-action="replayEnable" aria-pressed="false" disabled>Включить</button>
+            <button type="button" class="text-button" data-action="startReplayBuffer" disabled>Запустить буфер</button>
+          </div>
+        </article>
+        <article class="surface feature">
+          <div><h2>Ножевой раунд</h2><p>Покажите плашку в OBS перед началом раунда.</p></div>
+          <button type="button" class="button" data-action="knife" disabled>Показать</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="setup" class="view secondary-view" aria-labelledby="setup-title" hidden>
+      <header class="page-heading"><h1 id="setup-title">Настройка</h1><p>Сохраните подключения, затем примените конфигурацию CS2.</p></header>
+      <form id="settings" class="settings" autocomplete="off">
+        <section class="surface form-card" aria-labelledby="site-title">
+          <h2 id="site-title">Сайт турнира</h2>
+          <p>Данные для подключения выдаёт организатор. Для локального теста поля можно оставить пустыми.</p>
+          <label for="site-url">Адрес турнира</label>
+          <input type="url" id="site-url" placeholder="https://cup.example.com" spellcheck="false">
+          <label for="publish-key">Ключ наблюдателя</label>
+          <input type="password" id="publish-key" autocomplete="new-password" spellcheck="false" placeholder="Ключ publish">
+          <label id="clear-publish-label" class="check" hidden><input type="checkbox" id="clear-publish"> Удалить сохранённый ключ наблюдателя</label>
+        </section>
+        <section class="surface form-card" aria-labelledby="obs-title">
+          <h2 id="obs-title">OBS WebSocket</h2>
+          <p>В OBS откройте Инструменты → Настройки сервера WebSocket и включите сервер.</p>
+          <label for="obs-port">Порт WebSocket</label>
+          <input type="number" id="obs-port" min="1" max="65535" value="4455" required>
+          <label for="obs-password">Пароль WebSocket</label>
+          <input type="password" id="obs-password" autocomplete="new-password" spellcheck="false" placeholder="Пароль из OBS">
+          <label id="clear-obs-label" class="check" hidden><input type="checkbox" id="clear-obs"> Удалить сохранённый пароль WebSocket</label>
+          <label for="obs-collection">Коллекция при запуске OBS</label>
+          <select id="obs-collection"><option value="DUO CUP · CS2">DUO CUP · CS2 (1080p)</option><option value="DUO CUP · CS2 4K">DUO CUP · CS2 4K</option></select>
+          <div class="form-actions">
+            <button type="button" class="button" data-action="setupObsScenes" disabled>Добавить коллекции OBS</button>
+          </div>
+          <p id="obs-setup-hint">Для добавления коллекций закройте OBS.</p>
+        </section>
+        <section class="surface form-card game-settings" aria-labelledby="cs2-title">
+          <h2 id="cs2-title">Counter-Strike 2</h2>
+          <p id="cs2-detected">Проверяем папки библиотеки Steam.</p>
+          <label for="cs2-path">Папка CS2</label>
+          <div class="path-input"><input type="text" id="cs2-path" spellcheck="false" placeholder="Путь к установленной игре"><button type="button" id="choose-cs2" class="button">Выбрать папку</button></div>
+          <div class="form-actions">
+            <button type="submit" class="button primary" id="save-settings" disabled>Сохранить настройки</button>
+            <button type="button" class="button" data-action="installCs2" disabled>Установить конфиги CS2</button>
+          </div>
+          <p>После установки конфигов перезапустите игру. Войдите в матч наблюдателем и выполните <code>exec duocup_match_hud</code>, чтобы скрыть игровой HUD. <button type="button" id="copy-hud-command" class="text-button" disabled>Скопировать команду</button></p>
+        </section>
+      </form>
+    </section>
+
+    <section id="help" class="view secondary-view" aria-labelledby="help-title" hidden>
+      <header class="page-heading"><h1 id="help-title">Диагностика</h1><p>Проверка сигнала и адреса источников для своей коллекции OBS.</p></header>
+      <div class="help-grid">
+        <section class="surface form-card" aria-labelledby="checks-title">
+          <h2 id="checks-title">Перед эфиром</h2>
+          <ol class="checklist">
+            <li>Запустите службу и примените конфиги CS2 в разделе «Настройка».</li>
+            <li>В OBS импортируйте коллекцию DUO CUP для 1080p или 4K. В сцене «02 · Матч CS2» выберите окно игры в источнике захвата.</li>
+            <li>Зайдите наблюдателем и дождитесь, пока в приложении появится карта.</li>
+            <li>Для автоповтора включите в OBS буфер на 8–12 секунд и запустите его. Затем включите автоповтор в приложении.</li>
+          </ol>
+          <div class="form-actions"><button type="button" class="button" data-action="openObsGuide" disabled>Инструкция OBS</button><button type="button" class="button" data-action="openObsScenes" disabled>Файлы коллекции</button></div>
+        </section>
+        <section class="surface form-card" aria-labelledby="logs-title">
+          <h2 id="logs-title">Служба и файлы</h2>
+          <p id="service-diagnostic">Проверяем службу.</p>
+          <p id="runtime-path" class="file-path"></p>
+          <div class="form-actions"><button type="button" class="button" data-action="openLogs" disabled>Журнал службы</button><button type="button" class="button" data-action="openRuntime" disabled>Открыть папку данных</button></div>
+        </section>
+        <section class="surface form-card sources" aria-labelledby="source-title">
+          <h2 id="source-title">Адреса для OBS</h2>
+          <p>Добавляйте источники типа «Браузер» с размером 1920×1080 и частотой 60 FPS.</p>
+          <dl id="source-list" class="source-list"></dl>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

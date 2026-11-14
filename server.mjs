@@ -77,7 +77,11 @@ let observerHud = createObserverHud(steamAvatar);
 const staleAfter = 15_000;
 const resultsStaleAfter = 90_000;
 let lastFinish = null;
-const publication = isServer ? null : readJson(join(runtime, 'publish.json'), null);
+function observerConfig(name, variable) {
+  return Object.hasOwn(process.env, variable) ? JSON.parse(process.env[variable]) : readJson(join(runtime, name), null);
+}
+
+const publication = isServer ? null : observerConfig('publish.json', 'DUOCUP_PUBLICATION');
 let publicationUrl;
 if (publication) {
   const url = new URL(publication.url);
@@ -98,7 +102,7 @@ let knifeInProgress = false;
 let obsReplay = null;
 if (!isServer) {
   try {
-    const settings = readJson(join(runtime, 'obs.json'), null);
+    const settings = observerConfig('obs.json', 'DUOCUP_OBS');
     if (settings) {
       if ((settings.port != null && (!Number.isInteger(settings.port) || settings.port < 1 || settings.port > 65535))
           || (settings.password != null && typeof settings.password !== 'string')) {
@@ -322,6 +326,9 @@ async function handle(req, res) {
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, isServer ? spectatorView(event, state) : publicState());
+    if (!isServer && req.method === 'GET' && path === '/api/observer-info') {
+      return json(res, 200, { app: 'DUO CUP', instance: process.env.DUOCUP_INSTANCE ?? null });
+    }
     if (!isServer && req.method === 'GET' && path === '/api/hud-media') return json(res, 200, readJson(join(runtime, 'hud-media.json'), {}));
     if (!isServer && req.method === 'POST' && path === '/api/gsi') {
       receiveGame(await readBody(req));
