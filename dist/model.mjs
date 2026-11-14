@@ -167,9 +167,14 @@ export async function readEvent() {
   return response.json();
 }
 
-export function watchState(render, onError = () => {}, interval = 1800) {
+export function watchState(render, onError = () => {}, interval = 1800, { backgroundInterval = 4000 } = {}) {
   let previous = '';
+  let timer;
+  let refreshing = false;
   async function refresh() {
+    if (refreshing) return;
+    clearTimeout(timer);
+    refreshing = true;
     try {
       const response = await fetch('/api/state', { cache: 'no-store', signal: AbortSignal.timeout(3500) });
       if (!response.ok) throw new Error('Связь потеряна');
@@ -178,8 +183,12 @@ export function watchState(render, onError = () => {}, interval = 1800) {
       if (signature !== previous) { render(state); previous = signature; }
       onError(false);
     } catch { previous = ''; onError(true); }
-    setTimeout(refresh, document.hidden ? 4000 : interval);
+    finally {
+      refreshing = false;
+      timer = setTimeout(refresh, document.hidden ? backgroundInterval : interval);
+    }
   }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   refresh();
 }
 

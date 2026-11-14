@@ -18,6 +18,9 @@
     },
     {
       "name": "04 · Смена карты"
+    },
+    {
+      "name": "05 · Повтор"
     }
   ],
   "sources": [
@@ -49,6 +52,8 @@
         "url": "http://127.0.0.1:8787/obs",
         "width": 1920,
         "height": 1080,
+        "fps_custom": true,
+        "fps": 60,
         "shutdown": false,
         "restart_when_active": false
       },
@@ -67,6 +72,8 @@
         "url": "http://127.0.0.1:8787/obs?scene=standby",
         "width": 1920,
         "height": 1080,
+        "fps_custom": true,
+        "fps": 60,
         "shutdown": false,
         "restart_when_active": false
       },
@@ -98,6 +105,8 @@
         "url": "http://127.0.0.1:8787/obs?scene=match-wait",
         "width": 1920,
         "height": 1080,
+        "fps_custom": true,
+        "fps": 60,
         "shutdown": false,
         "restart_when_active": true
       },
@@ -116,8 +125,47 @@
         "url": "http://127.0.0.1:8787/obs?scene=map-change",
         "width": 1920,
         "height": 1080,
+        "fps_custom": true,
+        "fps": 60,
         "shutdown": false,
         "restart_when_active": true
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "DUO CUP · клип повтора",
+      "uuid": "b56ba921-7ce0-4712-83b1-66ac9c00c3a0",
+      "id": "ffmpeg_source",
+      "versioned_id": "ffmpeg_source",
+      "settings": {
+        "is_local_file": true,
+        "local_file": "",
+        "restart_on_activate": true,
+        "close_when_inactive": true,
+        "looping": false
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "DUO CUP · плашка повтора",
+      "uuid": "84d54609-94d0-45ba-a3df-63b331564c84",
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "settings": {
+        "is_local_file": false,
+        "url": "http://127.0.0.1:8787/obs?scene=replay",
+        "width": 1920,
+        "height": 1080,
+        "fps_custom": true,
+        "fps": 60,
+        "shutdown": false,
+        "restart_when_active": false
       },
       "enabled": true,
       "muted": false,
@@ -369,6 +417,91 @@
             "name": "Комментатор · микрофон",
             "source_uuid": "7591685f-8e5c-4c1b-ae8a-aaea60164311",
             "id": 2,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 0,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          }
+        ]
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "05 · Повтор",
+      "uuid": "f9fdf439-ed03-4c35-96e2-e8d55dce8684",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 3,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "DUO CUP · клип повтора",
+            "source_uuid": "b56ba921-7ce0-4712-83b1-66ac9c00c3a0",
+            "id": 1,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 2,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          },
+          {
+            "name": "DUO CUP · плашка повтора",
+            "source_uuid": "84d54609-94d0-45ba-a3df-63b331564c84",
+            "id": 2,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 2,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          },
+          {
+            "name": "Комментатор · микрофон",
+            "source_uuid": "7591685f-8e5c-4c1b-ae8a-aaea60164311",
+            "id": 3,
             "visible": true,
             "locked": false,
             "pos": {

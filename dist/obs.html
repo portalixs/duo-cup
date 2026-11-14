@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/obs.css">
   <link rel="stylesheet" href="/hud.css">
   <link rel="stylesheet" href="/hud-results.css">
+  <link rel="stylesheet" href="/obs-transitions.css">
   <script type="module" src="/obs.mjs"></script>
 </head>
 <body>
@@ -55,6 +56,12 @@
     </div>
   </main>
   <main id="map-results" class="map-results" aria-label="Итоги карты" hidden></main>
+  <main id="replay" class="replay" aria-label="Повтор" hidden>
+    <div class="replay-cover" aria-hidden="true"></div>
+    <div class="replay-caption">
+      <strong>ПОВТОР</strong><div id="replay-moment" class="replay-moment" hidden><b id="replay-title"></b><span id="replay-player"></span></div>
+    </div>
+  </main>
 
   <main id="standby" class="standby" hidden>
     <div class="standby-arena" aria-hidden="true"></div>

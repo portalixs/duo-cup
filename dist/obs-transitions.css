@@ -1,0 +1,151 @@
+.obs-transition {
+  --s: min(.1vw, .17778vh);
+  --blue: #5786ff;
+  --red: #ee3b63;
+  --accent: #b9ccff;
+  --ease: cubic-bezier(.18, .83, .23, 1);
+  position: fixed;
+  z-index: 10;
+  top: 16vh;
+  left: 50%;
+  width: min(88vw, calc(var(--s) * 455));
+  color: #f5f8ff;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.obs-transition[data-kind='finish'] { top: 28vh; }
+.obs-transition[data-kind='knife'] { --accent: #ffcc8a; }
+.obs-transition[data-kind^='ot-'] { --accent: #a5ffd1; }
+.obs-transition[data-kind='opening'] .obs-transition-title { text-transform: capitalize; }
+.obs-transition[data-kind^='swap-'] .obs-transition-blue { --team-shift: 28; }
+.obs-transition[data-kind^='swap-'] .obs-transition-red { --team-shift: -28; }
+
+.obs-transition-card {
+  position: relative;
+  isolation: isolate;
+  box-shadow: 0 calc(var(--s) * 9) calc(var(--s) * 25) #0008;
+  animation: obs-transition-in 340ms var(--ease) both;
+}
+
+.obs-transition-card::after {
+  position: absolute;
+  inset: 0;
+  border-top: calc(var(--s) * 1.4) solid transparent;
+  border-image: linear-gradient(90deg, var(--blue), var(--accent) 50%, var(--red)) 1;
+  content: '';
+  pointer-events: none;
+  animation: obs-transition-edge 660ms var(--ease) both;
+}
+
+.obs-transition-hero {
+  display: grid;
+  gap: calc(var(--s) * 4);
+  padding: calc(var(--s) * 14) calc(var(--s) * 17) calc(var(--s) * 12);
+  text-align: center;
+  background: linear-gradient(111deg, #223966ee, #101a2cfb 41%, #18192cfc 58%, #4d2034ee);
+}
+
+.obs-transition-overline {
+  color: var(--accent);
+  font-size: calc(var(--s) * 12);
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  animation: obs-transition-content 460ms var(--ease) both;
+}
+
+.obs-transition-overline:empty { display: none; }
+
+.obs-transition-title {
+  font-size: calc(var(--s) * 33);
+  font-weight: 760;
+  line-height: 1.04;
+  overflow-wrap: anywhere;
+  animation: obs-transition-content 500ms var(--ease) both;
+}
+
+.obs-transition-detail {
+  color: #d0dbed;
+  font-size: calc(var(--s) * 13);
+  font-weight: 620;
+  line-height: 1.2;
+  animation: obs-transition-content 540ms var(--ease) both;
+}
+
+.obs-transition-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  border-top: 1px solid #b8cdf538;
+  background: #101925f5;
+}
+
+.obs-transition-team {
+  display: grid;
+  align-content: center;
+  gap: calc(var(--s) * 2);
+  min-width: 0;
+  padding: calc(var(--s) * 6) calc(var(--s) * 13);
+}
+
+.obs-transition-blue {
+  border-left: calc(var(--s) * 3) solid var(--blue);
+  background: linear-gradient(90deg, #2e4b9d94, transparent);
+  animation: obs-transition-team-in 500ms var(--ease) both;
+}
+
+.obs-transition-red {
+  --team-shift: 14;
+  border-right: calc(var(--s) * 3) solid var(--red);
+  background: linear-gradient(270deg, #8e214e8c, transparent);
+  text-align: right;
+  animation: obs-transition-team-in 500ms var(--ease) both;
+}
+
+.obs-transition-team b { font-size: calc(var(--s) * 16); line-height: 1; }
+.obs-transition-team span {
+  overflow: hidden;
+  color: #d5e0f5;
+  font-size: calc(var(--s) * 11);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.obs-transition-count {
+  display: grid;
+  place-content: center;
+  min-width: calc(var(--s) * 77);
+  padding: calc(var(--s) * 5) calc(var(--s) * 9);
+  border-inline: 1px solid #b8cdf52a;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.obs-transition-count strong { font-size: calc(var(--s) * 21); line-height: 1; white-space: nowrap; }
+.obs-transition-count span { margin-top: calc(var(--s) * 2); color: #aebeda; font-size: calc(var(--s) * 8); }
+.obs-transition.is-leaving .obs-transition-card { animation: obs-transition-out 220ms ease-in both; }
+
+@keyframes obs-transition-in {
+  from { opacity: 0; transform: translateY(calc(var(--s) * -10)) scale(.96); clip-path: inset(0 12%); }
+  to { opacity: 1; transform: none; clip-path: inset(0 -10% -35%); }
+}
+@keyframes obs-transition-edge {
+  from { clip-path: inset(0 48% 0 48%); }
+  to { clip-path: inset(0); }
+}
+@keyframes obs-transition-content {
+  from { opacity: 0; transform: translateY(calc(var(--s) * 7)); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes obs-transition-team-in {
+  from { opacity: 0; transform: translateX(calc(var(--s) * var(--team-shift, -14))); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes obs-transition-out {
+  to { opacity: 0; transform: translateY(calc(var(--s) * -7)) scale(.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obs-transition *, .obs-transition-card::after, .obs-transition.is-leaving .obs-transition-card { animation: none; }
+}

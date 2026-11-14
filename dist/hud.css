@@ -45,9 +45,14 @@
 .radar-marks { overflow: visible; }
 .radar-site, .radar-dot, .radar-grenade {
   position: absolute;
+  top: 0;
+  left: 0;
   display: grid;
   place-items: center;
-  transform: translate(-50%, -50%);
+  transform: translate(
+    calc(var(--radar-size) * var(--radar-x, 0) - 50%),
+    calc(var(--radar-size) * var(--radar-y, 0) - 50%)
+  );
 }
 .radar-site {
   z-index: 1;
@@ -70,7 +75,7 @@
   background: var(--radar-color, var(--blue));
   box-shadow: 0 1px 3px #000a;
   font: 650 calc(var(--u) * 12)/1 var(--display);
-  transition: left 125ms linear, top 125ms linear, border-color 180ms ease, box-shadow 180ms ease;
+  transition: transform 115ms linear, border-color 180ms ease, box-shadow 180ms ease;
 }
 .radar-dot.side-t { --radar-color: var(--red); }
 .radar-face { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }

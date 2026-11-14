@@ -8,6 +8,7 @@ import { createObserverHud } from './hud-data.mjs';
 import { createSteamAvatarLookup } from './steam-avatars.mjs';
 import { error, updateMatch } from './tournament-control.mjs';
 import { observerUpdate, organizerView, spectatorView } from './observer-bridge.mjs';
+import { createObsReplay } from './obs-replay.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const dist = join(root, 'dist');
@@ -45,8 +46,8 @@ const cfg = `"DUO CUP observer"
 {
     "uri" "http://127.0.0.1:${port}/api/gsi"
     "timeout" "2.0"
-    "buffer" "0.1"
-    "throttle" "0.2"
+    "buffer" "0.05"
+    "throttle" "0.1"
     "heartbeat" "5.0"
     "auth" { "token" "${keys.gsi}" }
     "data"
@@ -92,6 +93,21 @@ let revision = -1;
 let completedMap = null;
 let incomingBridge = null;
 let serverRevision = Date.now();
+let knifePrompt = null;
+let knifeInProgress = false;
+let obsReplay = null;
+if (!isServer) {
+  try {
+    const settings = readJson(join(runtime, 'obs.json'), null);
+    if (settings) {
+      if ((settings.port != null && (!Number.isInteger(settings.port) || settings.port < 1 || settings.port > 65535))
+          || (settings.password != null && typeof settings.password !== 'string')) {
+        throw new Error('Проверьте порт и пароль в runtime/obs.json');
+      }
+      obsReplay = createObsReplay(settings);
+    }
+  } catch (cause) { console.warn(`Повтор OBS: ${cause.message}`); }
+}
 
 function commit(next) {
   const temporary = `${statePath}.tmp`;
@@ -131,7 +147,7 @@ function json(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-function publicState() {
+function publicState(organizer = false) {
   const now = Date.now();
   const fresh = now - lastGsi < staleAfter;
   const showGame = game?.phase === 'gameover' ? now - lastFinish.at < resultsStaleAfter : fresh;
@@ -146,6 +162,10 @@ function publicState() {
     streamUrl: state.streamUrl || event.streamUrl,
     service: true,
     publishStatus,
+    ...(knifePrompt?.until > now && { knifePrompt }),
+    ...(obsReplay?.current() && { replay: obsReplay.current() }),
+    ...(obsReplay?.pending() && { replayPending: true }),
+    ...(organizer && { obs: obsReplay?.status() ?? null, localGraphics: true }),
   };
 }
 
@@ -154,11 +174,19 @@ function updateActiveMatch(next) {
   if ((state.started && !next.started) || clearedResult) {
     game = null;
     completedMap = null;
+    obsReplay?.stop();
+    knifePrompt = null;
+    knifeInProgress = false;
     observerHud = createObserverHud(steamAvatar);
   }
   if (state.active === next.active) return;
   const confirmed = next.active == null && state.active && next.results[state.active] && !state.results[state.active];
-  if (!confirmed || game?.phase !== 'gameover') game = null;
+  if (!confirmed || game?.phase !== 'gameover') {
+    game = null;
+    obsReplay?.stop();
+  }
+  knifePrompt = null;
+  knifeInProgress = false;
   completedMap = null;
 }
 
@@ -210,6 +238,7 @@ function receiveGame(payload) {
   if (!Number.isSafeInteger(ct) || ct < 0 || !Number.isSafeInteger(t) || t < 0 ||
       typeof map.name !== 'string' || !/^[a-z0-9_/-]{1,128}$/i.test(map.name)) {
     if (game?.phase !== 'gameover') game = null;
+    if (!game) obsReplay?.ingest(null);
     return;
   }
   const mapId = map.name.split('/').at(-1).toLowerCase();
@@ -249,6 +278,7 @@ function receiveGame(payload) {
     }
   }
   if (isFinal) lastFinish = { mapId, matchId, rounds: ct + t, at: now };
+  if (knifeInProgress && ['live', 'over'].includes(game?.phase) && ['warmup', 'freezetime'].includes(phase)) knifeInProgress = false;
   game = {
     map: mapName.charAt(0).toUpperCase() + mapName.slice(1),
     mapId, matchId, ct, t, round,
@@ -258,13 +288,30 @@ function receiveGame(payload) {
     buying: phase === 'freezetime',
     clockEnd: isFinal ? null : hud.clockEnd,
   };
+  const plannedMap = options?.maps?.[options.mapResults?.length ?? 0];
+  obsReplay?.ingest(matchId && (!plannedMap || mapId === plannedMap || isFinal) && !knifeInProgress ? game : null);
+}
+
+async function applyLocalGraphics(body) {
+  if (body.action === 'obs-replay') {
+    if (!obsReplay || typeof body.enabled !== 'boolean') throw error(400, 'Настройте runtime/obs.json на ПК наблюдателя');
+    try { await obsReplay.setEnabled(body.enabled); }
+    catch (cause) { throw error(409, cause.message); }
+  } else {
+    if (!state.active || obsReplay?.current() || (game && (game.phase === 'gameover' || game.ct + game.t > 0))) {
+      throw error(409, 'Выведите матч в эфир и покажите ножевой до первого раунда');
+    }
+    const now = Date.now();
+    knifePrompt = { id: randomBytes(8).toString('hex'), match: state.active, until: now + 3500 };
+    knifeInProgress = true;
+  }
 }
 
 const publicFiles = new Map([
   ['/', 'index.html'], ['/obs', 'obs.html'], ['/control', 'control.html'],
-  ...['index.html', 'obs.html', 'control.html', 'event.json', 'style.css', 'control.css', 'obs.css', 'hud.css', 'hud-results.css', 'art.svg',
+  ...['index.html', 'obs.html', 'control.html', 'event.json', 'style.css', 'control.css', 'obs.css', 'hud.css', 'hud-results.css', 'obs-transitions.css', 'art.svg',
     'arena.webp', 'archivo-black.woff2', 'archivo-black-license.txt',
-    'app.mjs', 'model.mjs', 'obs.mjs', 'hud-results.mjs', 'control.mjs'].map(file => [`/${file}`, file]),
+    'app.mjs', 'model.mjs', 'obs.mjs', 'hud-results.mjs', 'obs-transitions.mjs', 'control.mjs'].map(file => [`/${file}`, file]),
 ]);
 const mime = { html: 'text/html', css: 'text/css', mjs: 'text/javascript', json: 'application/json', svg: 'image/svg+xml',
   woff2: 'font/woff2', txt: 'text/plain; charset=utf-8',
@@ -299,6 +346,7 @@ async function handle(req, res) {
       if (req.method === 'POST') {
         const body = await readBody(req);
         if (isServer) applyServerAction(body);
+        else if (['obs-replay', 'obs-knife'].includes(body.action)) await applyLocalGraphics(body);
         else if (publication) await syncSite(body);
         else {
           const next = updateMatch(event, state, body, game?.mapId ?? null);
@@ -306,7 +354,7 @@ async function handle(req, res) {
           if (next !== state) commit(next);
         }
       }
-      return json(res, 200, isServer ? organizerView(event, state, incomingBridge) : publicState());
+      return json(res, 200, isServer ? organizerView(event, state, incomingBridge) : publicState(true));
     }
     const hudAsset = /^\/hud\/(assets\.json|(radar\/[a-z0-9_]+\.png)|(weapons\/[a-z0-9_]+\.svg))$/.test(path);
     const media = !isServer && /^\/hud-media\/[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp)$/.test(path);

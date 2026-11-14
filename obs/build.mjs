@@ -17,13 +17,30 @@ try {
   if (error.code !== 'ENOENT') throw error;
 }
 
-const browser = (query, refreshOnActivation = false) => ({ is_local_file: false, url: `http://127.0.0.1:${port}/obs${query}`, width: browserSize.x, height: browserSize.y, shutdown: false, restart_when_active: refreshOnActivation });
+const browser = (query, refreshOnActivation = false) => ({
+  is_local_file: false,
+  url: `http://127.0.0.1:${port}/obs${query}`,
+  width: browserSize.x,
+  height: browserSize.y,
+  fps_custom: true,
+  fps: 60,
+  shutdown: false,
+  restart_when_active: refreshOnActivation,
+});
 const source = (name, id, settings) => ({ name, uuid: previousUuids.get(name) ?? randomUUID(), id, versioned_id: id, settings, enabled: true, muted: false, volume: 1, mixers: 255 });
 const capture = source('CS2 · окно наблюдателя', 'window_capture', { window: 'Counter-Strike 2:SDL_app:cs2.exe', priority: 2, method: 2, cursor: false, client_area: true, capture_audio: true });
 const overlay = source('DUO CUP · графика матча', 'browser_source', browser(''));
 const standby = source('DUO CUP · заставка', 'browser_source', browser('?scene=standby'));
 const matchWait = source('DUO CUP · ожидание матча', 'browser_source', browser('?scene=match-wait', true));
 const mapChange = source('DUO CUP · смена карты', 'browser_source', browser('?scene=map-change', true));
+const replayClip = source('DUO CUP · клип повтора', 'ffmpeg_source', {
+  is_local_file: true,
+  local_file: '',
+  restart_on_activate: true,
+  close_when_inactive: true,
+  looping: false,
+});
+const replayOverlay = source('DUO CUP · плашка повтора', 'browser_source', browser('?scene=replay'));
 const microphone = source('Комментатор · микрофон', 'wasapi_input_capture', { device_id: 'default' });
 
 function scene(name, sources) {
@@ -42,10 +59,12 @@ const scenes = [
   match,
   scene('03 · Ожидание матча', [matchWait, microphone]),
   scene('04 · Смена карты', [mapChange, microphone]),
+  scene('05 · Повтор', [replayClip, replayOverlay, microphone]),
 ];
 const collection = {
   name: use4k ? 'DUO CUP · CS2 4K' : 'DUO CUP · CS2', resolution: canvas, current_scene: start.name, current_program_scene: start.name,
-  scene_order: scenes.map(({ name }) => ({ name })), sources: [capture, overlay, standby, microphone, matchWait, mapChange, ...scenes],
+  scene_order: scenes.map(({ name }) => ({ name })),
+  sources: [capture, overlay, standby, microphone, matchWait, mapChange, replayClip, replayOverlay, ...scenes],
   groups: [], transitions: [], quick_transitions: [], transition_duration: 250,
 };
 writeFileSync(output, `${JSON.stringify(collection, null, 2)}\n`);

@@ -293,6 +293,17 @@ const gamePhases = new Map([
 
 function renderGame() {
   const game = state.game;
+  const graphics = state.localGraphics === true;
+  const replay = state.obs;
+  el('local-graphics').hidden = !graphics;
+  el('obs-knife').disabled = !online || busy || !state.active || replay?.playing
+    || Boolean(game && (game.phase === 'gameover' || game.ct + game.t > 0));
+  el('obs-replay').hidden = !replay;
+  el('obs-replay').disabled = !online || busy;
+  el('obs-replay').setAttribute('aria-pressed', String(Boolean(replay?.enabled)));
+  el('obs-replay').textContent = replay?.enabled ? 'Выключить автоповтор' : 'Включить автоповтор';
+  el('obs-status').hidden = !replay;
+  el('obs-status').textContent = replay?.error || (replay?.playing ? 'Повтор в эфире' : '');
   const finished = game?.phase === 'gameover';
   const status = el('game-status');
   const unavailable = !online ? 'Связь с панелью потеряна'
@@ -480,6 +491,11 @@ function updateBroadcastDraft() {
 }
 
 el('overlay-link').hidden = !local;
+el('obs-knife').addEventListener('click', () => send({ action: 'obs-knife' }, 'Плашка ножевого отправлена в HUD.'));
+el('obs-replay').addEventListener('click', () => {
+  const enabled = !state.obs?.enabled;
+  void send({ action: 'obs-replay', enabled }, enabled ? 'Автоповтор включён.' : 'Автоповтор выключен.');
+});
 try {
   event = await readEvent();
   el('login-button').disabled = false;

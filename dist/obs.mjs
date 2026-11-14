@@ -1,10 +1,12 @@
 import { emptyState, readEvent, recordedSeriesScore, resolveMatches, safe, stageName, watchState } from './model.mjs';
 import { paintResults } from './hud-results.mjs';
+import { createObsTransitions } from './obs-transitions.mjs';
 
 const el = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const scene = params.get('scene');
 const standby = ['standby', 'match-wait', 'map-change'].includes(scene);
+const replayScene = scene === 'replay';
 const desktop = params.get('surface') === 'desktop';
 const phases = { warmup: 'Разминка', freezetime: 'Закуп', intermission: 'Смена сторон', halftime: 'Смена сторон',
   paused: 'Пауза', timeout_ct: 'Тайм-аут CT', timeout_t: 'Тайм-аут T', gameover: 'Карта завершена' };
@@ -33,7 +35,8 @@ async function optionalJson(url, fallback) {
 }
 
 el('standby').hidden = !standby;
-el('match-graphic').hidden = standby || desktop;
+el('replay').hidden = !replayScene;
+el('match-graphic').hidden = standby || replayScene || desktop;
 const [event, assets, media] = await Promise.all([
   readEvent(), optionalJson('/hud/assets.json', { maps: {}, weapons: [] }), optionalJson('/api/hud-media', {}),
 ]);
@@ -48,6 +51,15 @@ let fragCard = null;
 const cardNodes = new Map();
 const radarNodes = new Map();
 const avatarMarkup = new WeakMap();
+let currentState = emptyState;
+let lastKnife;
+const transitions = !standby && !replayScene && !desktop ? createObsTransitions({
+  onFinish: () => render(currentState), mapName: displayMapName,
+}) : null;
+
+function displayMapName(id, fallback) {
+  return id === 'de_dust2' ? 'Dust II' : assets.maps[id]?.name ?? fallback ?? id.replace(/^[a-z]+_/, '').replaceAll('_', ' ');
+}
 
 function setText(node, text) {
   const next = String(text);
@@ -276,7 +288,6 @@ function paintScoreboard(state, match, game) {
   return namesBySide;
 }
 
-const percent = value => `${(value * 100).toFixed(2)}%`;
 function showRadar(mapId, game) {
   const overview = Object.hasOwn(assets.maps, mapId) ? assets.maps[mapId] : null;
   el('radar').hidden = !overview;
@@ -307,8 +318,8 @@ function showRadar(mapId, game) {
       radarNodes.set(key, node);
     }
     if (node.className !== css) node.className = css;
-    node.style.left = percent(position[0]);
-    node.style.top = percent(position[1]);
+    node.style.setProperty('--radar-x', position[0].toFixed(4));
+    node.style.setProperty('--radar-y', position[1].toFixed(4));
     setMarkup(node, markup);
     return node;
   }
@@ -427,8 +438,7 @@ function paintStandbyMap(map) {
     return;
   }
   const overview = assets.maps[map.id];
-  const name = map.id === 'de_dust2' ? 'Dust II' : overview?.name ?? map.id.replace(/^[a-z]+_/, '').replaceAll('_', ' ');
-  setText(el('standby-map-name'), name);
+  setText(el('standby-map-name'), displayMapName(map.id));
   setText(el('standby-map-label'), map.label);
   const image = el('standby-map-icon');
   image.hidden = !overview?.icon;
@@ -464,6 +474,17 @@ function renderStandby(state, match, final) {
 }
 
 function render(state) {
+  currentState = state;
+  if (replayScene) {
+    const replay = state.replay;
+    el('replay').toggleAttribute('data-loading', !replay || replay.loading);
+    el('replay-moment').hidden = !replay;
+    if (replay) {
+      setText(el('replay-title'), replay.title);
+      setText(el('replay-player'), `${replay.name} · Раунд ${replay.round}`);
+    }
+    return;
+  }
   const matches = resolveMatches(event, state);
   const match = matches.find(match => match.id === state.active && match.teams.every(Boolean));
   if (standby) {
@@ -479,8 +500,13 @@ function render(state) {
       game.ct + game.t < previousGame.ct + previousGame.t) roundResult = null;
   previousGame = game;
   const resultMatch = game?.matchId ? matches.find(item => item.id === game.matchId && item.teams.every(Boolean)) : match;
-  const showingResults = paintResults(el('map-results'), game, resultMatch, state.broadcast?.[resultMatch?.id]);
-  el('match-graphic').hidden = showingResults || (desktop && !game?.players?.length);
+  const options = state.broadcast?.[resultMatch?.id];
+  const replaying = Boolean(state.replay || (game?.phase === 'gameover' && state.replayPending));
+  const finishIntro = transitions?.update(state, resultMatch, options, game, replaying);
+  const knife = state.knifePrompt;
+  if (transitions && knife && knife.match === match?.id && knife.id !== lastKnife && transitions.showKnife()) lastKnife = knife.id;
+  const showingResults = paintResults(el('map-results'), finishIntro || replaying ? null : game, resultMatch, options);
+  el('match-graphic').hidden = showingResults || finishIntro || (desktop && !game?.players?.length);
   if (el('match-graphic').hidden) {
     if (lastCamera) showObserved(null);
     return;
@@ -515,5 +541,6 @@ function render(state) {
 }
 
 render(emptyState);
-if (!standby) setInterval(() => { updateClock(); paintEvents(); }, 100);
-watchState(render, failed => { if (failed && !standby) render(emptyState); }, standby ? 1800 : 240);
+if (!standby && !replayScene) setInterval(() => { updateClock(); paintEvents(); }, 100);
+watchState(render, failed => { if (failed && !standby) render(emptyState); }, standby ? 1800 : 100,
+  { backgroundInterval: standby ? 4000 : 100 });

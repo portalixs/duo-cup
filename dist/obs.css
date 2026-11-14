@@ -9,6 +9,60 @@ body { margin: 0; overflow: hidden; background: transparent; color: var(--ink); 
 p, h1 { margin: 0; }
 [hidden] { display: none !important; }
 
+.replay {
+  --r: min(.1vw, .17778vh);
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  color: #f4f7ff;
+}
+
+.replay-cover {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  background: linear-gradient(115deg, #101c3a, #090f20 58%, #351329);
+}
+
+.replay[data-loading] .replay-cover { visibility: visible; }
+
+.replay-caption {
+  position: absolute;
+  top: calc(var(--r) * 22);
+  left: calc(var(--r) * 22);
+  display: flex;
+  align-items: stretch;
+  box-shadow: 0 calc(var(--r) * 3) calc(var(--r) * 16) #050b1a99;
+  background: #111b2cf0;
+}
+
+.replay-caption > strong {
+  display: grid;
+  place-items: center;
+  padding: calc(var(--r) * 9) calc(var(--r) * 15);
+  border-left: calc(var(--r) * 3) solid #ee3b63;
+  background: #881f42;
+  font-size: calc(var(--r) * 18);
+  letter-spacing: .075em;
+}
+
+.replay-moment {
+  display: grid;
+  gap: calc(var(--r) * 2);
+  padding: calc(var(--r) * 7) calc(var(--r) * 13);
+  font-size: calc(var(--r) * 15);
+}
+
+.replay-moment span { color: #a9bfdf; font-size: calc(var(--r) * 12); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .replay-moment:not([hidden]) { animation: replay-caption-in 220ms ease-out both; }
+}
+
+@keyframes replay-caption-in {
+  from { opacity: 0; transform: translateX(calc(var(--r) * -6)); }
+}
+
 @font-face {
   font-family: 'Archivo Black';
   src: url('/archivo-black.woff2') format('woff2');
