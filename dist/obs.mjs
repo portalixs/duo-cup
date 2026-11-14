@@ -3,7 +3,8 @@ import { paintResults } from './hud-results.mjs';
 
 const el = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const standby = params.get('scene') === 'standby';
+const scene = params.get('scene');
+const standby = ['standby', 'match-wait', 'map-change'].includes(scene);
 const desktop = params.get('surface') === 'desktop';
 const phases = { warmup: 'Разминка', freezetime: 'Закуп', intermission: 'Смена сторон', halftime: 'Смена сторон',
   paused: 'Пауза', timeout_ct: 'Тайм-аут CT', timeout_t: 'Тайм-аут T', gameover: 'Карта завершена' };
@@ -400,17 +401,60 @@ function paintEvents(now = Date.now()) {
   pulse(fragCard, 'is-entering');
 }
 
+function standbyMap(state, match, options, score) {
+  const maps = options?.maps ?? [];
+  const history = options?.mapResults ?? [];
+  const index = history.length;
+  const mapId = maps[index];
+  if (!match || match.winner || !mapId || scene === 'standby') return null;
+
+  const game = state.game;
+  const awaitingResult = options?.mapWinners?.[mapId]
+    || (game?.phase === 'gameover' && game.matchId === match.id && game.mapId === mapId);
+  if (scene === 'map-change' && awaitingResult) return { id: mapId, label: 'Результат на подтверждении' };
+  if (scene === 'map-change' && index === 0) return null;
+
+  const deciding = match.bestOf > 1 && score.every(wins => wins === (match.bestOf - 1) / 2);
+  const label = deciding ? 'Решающая карта' : scene === 'map-change' ? 'Следующая карта' : 'Карта';
+  return { id: mapId, label: `${label} · ${index + 1} из ${match.bestOf}` };
+}
+
+function paintStandbyMap(map) {
+  const node = el('standby-map');
+  node.hidden = !map;
+  if (!map) {
+    node.mapId = null;
+    return;
+  }
+  const overview = assets.maps[map.id];
+  const name = map.id === 'de_dust2' ? 'Dust II' : overview?.name ?? map.id.replace(/^[a-z]+_/, '').replaceAll('_', ' ');
+  setText(el('standby-map-name'), name);
+  setText(el('standby-map-label'), map.label);
+  const image = el('standby-map-icon');
+  image.hidden = !overview?.icon;
+  if (!image.hidden && node.mapId !== map.id) image.src = `/hud/radar/${map.id}_icon.png`;
+  if (node.mapId !== map.id) {
+    node.mapId = map.id;
+    pulse(node, 'is-entering');
+  }
+}
+
 function renderStandby(state, match, final) {
   const winner = final?.winner;
-  const message = winner ? 'Турнир завершён' : state.started ? 'Перерыв в эфире' : 'Скоро начнём';
+  const title = scene === 'match-wait' ? 'Ожидание начала матча' : scene === 'map-change' ? 'Смена карты' : null;
+  const message = winner ? 'Турнир завершён' : match?.winner ? 'Серия завершена'
+    : title ?? (state.started ? 'Перерыв в эфире' : 'Скоро начнём');
   const detail = winner ? `Победители · ${winner.players.join(' и ')}`
+    : match?.winner ? `Победители серии · ${match.winner.players.join(' и ')}`
     : match ? `${stageName(match.id)} · BO${match.bestOf}` : state.started ? '' : event.dateLabel;
+  const options = state.broadcast?.[match?.id];
+  const score = match && (match.score ?? state.seriesScores?.[match.id] ?? recordedSeriesScore(match, options));
   setText(el('standby-message'), message);
   setText(el('standby-detail'), detail);
   el('standby-detail').hidden = !detail;
   el('standby-match').hidden = !match || Boolean(winner);
+  paintStandbyMap(winner ? null : standbyMap(state, match, options, score));
   if (match && !winner) {
-    const score = match.score ?? state.seriesScores?.[match.id] ?? recordedSeriesScore(match, state.broadcast?.[match.id]);
     setText(el('standby-score'), score.join(' : '));
     for (const [i, side] of ['left', 'right'].entries()) {
       setText(el(`standby-${side}`), match.teams[i].tag);
@@ -422,7 +466,12 @@ function renderStandby(state, match, final) {
 function render(state) {
   const matches = resolveMatches(event, state);
   const match = matches.find(match => match.id === state.active && match.teams.every(Boolean));
-  if (standby) { renderStandby(state, match, matches.find(match => match.id === 'F1')); return; }
+  if (standby) {
+    const finished = scene === 'map-change' && state.game?.phase === 'gameover'
+      ? matches.find(item => item.id === state.game.matchId && item.winner) : null;
+    renderStandby(state, match ?? finished, matches.find(match => match.id === 'F1'));
+    return;
+  }
 
   const game = state.game;
   const observed = game?.players?.find(player => player.observed);

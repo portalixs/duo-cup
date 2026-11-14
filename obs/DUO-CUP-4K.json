@@ -12,6 +12,12 @@
     },
     {
       "name": "02 · Матч CS2"
+    },
+    {
+      "name": "03 · Ожидание матча"
+    },
+    {
+      "name": "04 · Смена карты"
     }
   ],
   "sources": [
@@ -76,6 +82,42 @@
       "versioned_id": "wasapi_input_capture",
       "settings": {
         "device_id": "default"
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "DUO CUP · ожидание матча",
+      "uuid": "c410a132-0bda-4cb5-9813-0ef0a3315d5b",
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "settings": {
+        "is_local_file": false,
+        "url": "http://127.0.0.1:8787/obs?scene=match-wait",
+        "width": 1920,
+        "height": 1080,
+        "shutdown": false,
+        "restart_when_active": true
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "DUO CUP · смена карты",
+      "uuid": "a61cabba-872c-477b-9bdc-d640a3cd9a3c",
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "settings": {
+        "is_local_file": false,
+        "url": "http://127.0.0.1:8787/obs?scene=map-change",
+        "width": 1920,
+        "height": 1080,
+        "shutdown": false,
+        "restart_when_active": true
       },
       "enabled": true,
       "muted": false,
@@ -203,6 +245,130 @@
             "name": "Комментатор · микрофон",
             "source_uuid": "7591685f-8e5c-4c1b-ae8a-aaea60164311",
             "id": 3,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 0,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          }
+        ]
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "03 · Ожидание матча",
+      "uuid": "2eeaff23-c8f2-4a18-939d-fe5ada472c3a",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "DUO CUP · ожидание матча",
+            "source_uuid": "c410a132-0bda-4cb5-9813-0ef0a3315d5b",
+            "id": 1,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 2,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          },
+          {
+            "name": "Комментатор · микрофон",
+            "source_uuid": "7591685f-8e5c-4c1b-ae8a-aaea60164311",
+            "id": 2,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 0,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          }
+        ]
+      },
+      "enabled": true,
+      "muted": false,
+      "volume": 1,
+      "mixers": 255
+    },
+    {
+      "name": "04 · Смена карты",
+      "uuid": "352e413c-b951-4046-950e-0b0210b5463a",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "DUO CUP · смена карты",
+            "source_uuid": "a61cabba-872c-477b-9bdc-d640a3cd9a3c",
+            "id": 1,
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "rot": 0,
+            "align": 5,
+            "bounds_align": 0,
+            "bounds_type": 2,
+            "bounds": {
+              "x": 3840,
+              "y": 2160
+            }
+          },
+          {
+            "name": "Комментатор · микрофон",
+            "source_uuid": "7591685f-8e5c-4c1b-ae8a-aaea60164311",
+            "id": 2,
             "visible": true,
             "locked": false,
             "pos": {

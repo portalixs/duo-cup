@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const use4k = process.argv.includes('--4k');
 const browserSize = { x: 1920, y: 1080 };
@@ -7,11 +7,23 @@ const canvas = use4k ? { x: 3840, y: 2160 } : browserSize;
 const noBounds = 0;
 const scaleInner = 2;
 const port = Number(process.env.PORT || 8787);
-const browser = name => ({ is_local_file: false, url: `http://127.0.0.1:${port}/obs${name}`, width: browserSize.x, height: browserSize.y, shutdown: false, restart_when_active: false });
-const source = (name, id, settings) => ({ name, uuid: randomUUID(), id, versioned_id: id, settings, enabled: true, muted: false, volume: 1, mixers: 255 });
+const filename = use4k ? 'DUO-CUP-4K.json' : 'DUO-CUP.json';
+const output = new URL(filename, import.meta.url);
+const previousUuids = new Map();
+try {
+  const previous = JSON.parse(readFileSync(output, 'utf8'));
+  for (const { name, uuid } of previous.sources) previousUuids.set(name, uuid);
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
+
+const browser = (query, refreshOnActivation = false) => ({ is_local_file: false, url: `http://127.0.0.1:${port}/obs${query}`, width: browserSize.x, height: browserSize.y, shutdown: false, restart_when_active: refreshOnActivation });
+const source = (name, id, settings) => ({ name, uuid: previousUuids.get(name) ?? randomUUID(), id, versioned_id: id, settings, enabled: true, muted: false, volume: 1, mixers: 255 });
 const capture = source('CS2 · окно наблюдателя', 'window_capture', { window: 'Counter-Strike 2:SDL_app:cs2.exe', priority: 2, method: 2, cursor: false, client_area: true, capture_audio: true });
 const overlay = source('DUO CUP · графика матча', 'browser_source', browser(''));
 const standby = source('DUO CUP · заставка', 'browser_source', browser('?scene=standby'));
+const matchWait = source('DUO CUP · ожидание матча', 'browser_source', browser('?scene=match-wait', true));
+const mapChange = source('DUO CUP · смена карты', 'browser_source', browser('?scene=map-change', true));
 const microphone = source('Комментатор · микрофон', 'wasapi_input_capture', { device_id: 'default' });
 
 function scene(name, sources) {
@@ -25,10 +37,15 @@ function scene(name, sources) {
 
 const start = scene('01 · Ожидание и перерыв', [standby, microphone]);
 const match = scene('02 · Матч CS2', [capture, overlay, microphone]);
+const scenes = [
+  start,
+  match,
+  scene('03 · Ожидание матча', [matchWait, microphone]),
+  scene('04 · Смена карты', [mapChange, microphone]),
+];
 const collection = {
   name: use4k ? 'DUO CUP · CS2 4K' : 'DUO CUP · CS2', resolution: canvas, current_scene: start.name, current_program_scene: start.name,
-  scene_order: [start, match].map(({ name }) => ({ name })), sources: [capture, overlay, standby, microphone, start, match],
+  scene_order: scenes.map(({ name }) => ({ name })), sources: [capture, overlay, standby, microphone, matchWait, mapChange, ...scenes],
   groups: [], transitions: [], quick_transitions: [], transition_duration: 250,
 };
-const filename = use4k ? 'DUO-CUP-4K.json' : 'DUO-CUP.json';
-writeFileSync(new URL(filename, import.meta.url), `${JSON.stringify(collection, null, 2)}\n`);
+writeFileSync(output, `${JSON.stringify(collection, null, 2)}\n`);
