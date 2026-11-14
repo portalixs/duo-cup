@@ -30,7 +30,7 @@ await build({
         from: project,
         to: 'duo-cup',
         filter: [
-          'dist/**/*', '!dist/server/**', 'obs/DUO-CUP*.json', 'obs/duocup_match_hud.cfg',
+          'dist/**/*', '!dist/server/**', 'obs/DUO-CUP*.json', 'obs/duocup_match_hud.cfg', 'obs/duo-cup-wave.webm',
           'server.mjs', 'hud-data.mjs', 'obs-replay.mjs', 'obs-websocket.mjs', 'observer-bridge.mjs',
           'replay-selection.mjs', 'steam-avatars.mjs', 'tournament-control.mjs',
         ],

@@ -1,0 +1,22 @@
+.round-mvp {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: calc(var(--u) * 6);
+  min-width: 0;
+  max-width: 100%;
+  padding-top: calc(var(--u) * 3);
+  font-size: calc(var(--u) * 10.5);
+  line-height: 1.12;
+  white-space: nowrap;
+}
+.round-mvp[hidden] { display: none; }
+.round-mvp-label { color: #ffd476; font-weight: 700; letter-spacing: .08em; }
+.round-mvp-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #f7fbff;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.round-mvp-detail { color: #d5e1f3; font-variant-numeric: tabular-nums; }

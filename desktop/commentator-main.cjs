@@ -221,7 +221,7 @@ async function openCommentator(overlay) {
         const canvas = collectionName() === collection4k ? { width: 3840, height: 2160 } : { width: 1920, height: 1080 };
         const profile = await obsSetup.prepareObsProfile({ canvas });
         if (scenes.ready && profile.ready) {
-          messages.push('Сцены OBS, 60 FPS и буфер готовы.');
+          messages.push('Сцены OBS, диагональный переход, 60 FPS и буфер готовы.');
           if (!readJson(settingsFile, {}).obsCollection && profile.baseWidth === 3840) {
             settings = { ...settings, obsCollection: collection4k };
             writeJson(settingsFile, settings);

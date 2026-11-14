@@ -82,6 +82,25 @@ function readRoundResult(payload, score, phase, bomb, previous, current, now, ev
   return { id: current?.id ?? eventId(), at: current?.at ?? now, round, side: winner, reason };
 }
 
+function readRoundMvp(players, baseline, current) {
+  let winner = null;
+  for (const player of players) {
+    const before = baseline.get(player.key);
+    if (player.mvps == null || before == null || player.mvps === before) continue;
+    // GSI supplies a cumulative award counter. A skipped or conflicting update is ambiguous.
+    if (player.mvps !== before + 1 || winner) return null;
+    winner = player;
+  }
+  if (!winner) return current ?? null;
+
+  const stats = key => {
+    const before = current?.name === winner.name ? current[key] : null;
+    const after = winner[key];
+    return before == null || after == null ? before ?? after : Math.max(before, after);
+  };
+  return { name: winner.name, side: winner.side, roundKills: stats('roundKills'), roundDamage: stats('roundDamage') };
+}
+
 function killDelta(player, previous) {
   if (player.roundKills != null && previous.roundKills != null) return player.roundKills - previous.roundKills;
   return player.kills != null && previous.kills != null ? player.kills - previous.kills : 0;
@@ -119,6 +138,7 @@ function createHudEvents() {
   let previous = null;
   let bomb = null;
   let roundResult = null;
+  let mvpBaseline = new Map();
   let frags = [];
   let sequence = 0;
 
@@ -127,17 +147,26 @@ function createHudEvents() {
     const t = payload.map?.team_t?.score ?? 0;
     const total = ct + t;
     const sameMap = previous?.identity === identity && now - previous.at < 15_000 && total >= previous.total && phase !== 'warmup';
+    const ended = roundEndPhases.includes(phase);
     const sameRound = sameMap && (total === previous.total ||
-      (['over', 'gameover'].includes(phase) && total === previous.total + 1));
+      (ended && total === previous.total + 1 && total <= (roundResult?.round ?? Infinity)));
     const eventId = () => `${now}-${++sequence}`;
 
     // A new round can start before GSI reports the first freeze-time packet.
     const startsRound = phase === 'freezetime' || (roundEndPhases.includes(previous?.phase) && !roundEndPhases.includes(phase));
     const keepRound = sameRound && !startsRound;
     const keepBomb = keepRound || (sameMap && previous.phase === phase && phase === 'freezetime');
+    if (!keepRound) mvpBaseline = new Map();
+    const priorMvp = keepRound ? roundResult?.mvp : null;
     bomb = readBomb(payload, players, phase, clockEnd, keepBomb ? bomb : null, now, eventId);
     roundResult = readRoundResult(payload, { ct, t, total }, phase, bomb, sameMap ? previous : null,
       keepRound ? roundResult : null, now, eventId);
+    if (roundResult) roundResult.mvp = readRoundMvp(players, mvpBaseline, priorMvp);
+    if (phase && phase !== 'warmup' && !ended) {
+      for (const player of players) {
+        if (player.mvps != null && !mvpBaseline.has(player.key)) mvpBaseline.set(player.key, player.mvps);
+      }
+    }
     frags = keepRound ? frags.filter(frag => now - frag.at < 7000) : [];
     if (keepRound && playablePhases.includes(previous.phase) && playablePhases.includes(phase)) {
       const frag = readFrag(players, previous.players, now, eventId);
@@ -219,10 +248,12 @@ export function createObserverHud(avatarFor = () => null) {
     }
     players.sort((a, b) => (a.slot ?? Infinity) - (b.slot ?? Infinity) || a.name.localeCompare(b.name));
 
-    const identity = `${match?.id ?? ''}/${mapId}`;
+    const matchId = match?.id ?? '';
+    const identity = `${matchId}/${mapId}`;
     const mapping = `${options?.ctTeam ?? ''}/${options?.sideMap ?? ''}/${options?.sideRevision ?? ''}`;
-    if (identity !== previousMatch || mapping !== previousMapping) {
-      previousMatch = identity;
+    // Player identity stays with the team even when it changes side on another map.
+    if (matchId !== previousMatch || mapping !== previousMapping) {
+      previousMatch = matchId;
       previousMapping = mapping;
       anchors = new Map();
     }

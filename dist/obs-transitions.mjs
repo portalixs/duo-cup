@@ -1,9 +1,10 @@
 import { recordedSeriesScore } from './model.mjs';
+import { paintRoundMvp } from './hud-mvp.mjs';
 
 const broadcastPhases = new Set(['freezetime', 'halftime', 'intermission']);
 const midBreakPhases = new Set(['halftime', 'intermission']);
 const displayMs = 2350;
-const exitMs = 220;
+const exitMs = 460;
 
 const teamLabels = team => ({ tag: team.tag, names: team.players.join(' / ') });
 
@@ -58,7 +59,13 @@ function makeTransition() {
   node.className = 'obs-transition';
   node.setAttribute('aria-label', 'Событие матча');
   node.hidden = true;
-  node.innerHTML = `<div class="obs-transition-card">
+  node.innerHTML = `<div class="obs-transition-wave" aria-hidden="true">
+    <div class="obs-transition-edge"></div>
+    <div class="obs-transition-body"></div>
+  </div>
+  <div class="obs-transition-exit" aria-hidden="true"></div>
+  <div class="obs-transition-card">
+    <div class="obs-transition-brand">DUO CUP</div>
     <div class="obs-transition-hero">
       <div class="obs-transition-overline"></div>
       <div class="obs-transition-title"></div>
@@ -91,29 +98,28 @@ export function createObsTransitions({ onFinish, mapName }) {
   let knife;
   let timer;
   let exitTimer;
+  let activeSequence = 0;
 
-  function hide(notify = false) {
-    const wasFinish = active === 'finish';
+  function hide() {
     clearTimeout(timer);
     clearTimeout(exitTimer);
     exitTimer = null;
     node.hidden = true;
     active = null;
-    if (notify && wasFinish) onFinish?.();
   }
 
   function leave() {
     if (!active || exitTimer) return;
     node.classList.add('is-leaving');
-    exitTimer = setTimeout(() => {
-      exitTimer = null;
-      hide(true);
-    }, exitMs);
+    exitTimer = setTimeout(hide, exitMs);
+    if (active === 'finish') onFinish?.();
   }
 
   function show(announcement, sides, duration = displayMs) {
     hide();
     active = announcement.kind;
+    activeSequence++;
+    paintRoundMvp(node.querySelector('.obs-transition-hero'), null);
     label.textContent = announcement.label;
     title.textContent = announcement.title;
     detail.textContent = announcement.detail ?? '';
@@ -130,6 +136,8 @@ export function createObsTransitions({ onFinish, mapName }) {
     }
     node.dataset.kind = announcement.kind;
     node.classList.remove('is-leaving');
+    // Resolve the hidden style so back-to-back announcements restart the wipe.
+    void node.offsetWidth;
     node.hidden = false;
     timer = setTimeout(leave, duration);
   }
@@ -179,7 +187,8 @@ export function createObsTransitions({ onFinish, mapName }) {
         show(pendingFinish, sideNames(match, game), 2100);
         pendingFinish = null;
       }
-      return active === 'finish';
+      if (active === 'finish') paintRoundMvp(node.querySelector('.obs-transition-hero'), game.roundResult?.mvp, activeSequence);
+      return active === 'finish' && !exitTimer;
     }
 
     pendingFinish = null;

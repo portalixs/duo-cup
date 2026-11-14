@@ -1,5 +1,6 @@
 import { emptyState, readEvent, recordedSeriesScore, resolveMatches, safe, stageName, watchState } from './model.mjs';
 import { paintResults } from './hud-results.mjs';
+import { paintRoundMvp } from './hud-mvp.mjs';
 import { createObsTransitions } from './obs-transitions.mjs';
 
 const el = id => document.getElementById(id);
@@ -50,6 +51,7 @@ let latestFrag = null;
 let fragCard = null;
 const cardNodes = new Map();
 const radarNodes = new Map();
+let radarContext;
 const avatarMarkup = new WeakMap();
 let currentState = emptyState;
 let lastKnife;
@@ -105,7 +107,14 @@ function avatar(player) {
   const cached = avatarMarkup.get(player);
   if (cached) return cached;
   const configured = Object.hasOwn(media, player.name) ? media[player.name] : null;
-  const file = imagePath(configured?.avatar) || imagePath(configured?.portrait) || imagePath(player.avatar) || steamAvatarUrl(player.avatar);
+  const steam = steamAvatarUrl(player.avatar);
+  const alternateSteamHost = steam.startsWith('https://avatars.akamai.steamstatic.com/')
+    ? 'avatars.fastly.steamstatic.com' : 'avatars.akamai.steamstatic.com';
+  const alternateSteam = steam.replace(/^https:\/\/[^/]+/, `https://${alternateSteamHost}`);
+  const sources = [...new Set([
+    imagePath(configured?.avatar), imagePath(configured?.portrait), imagePath(player.avatar), steam, alternateSteam,
+  ].filter(Boolean))];
+  const [file] = sources;
   const seed = [...playerKey(player)].reduce((sum, char) => (sum * 31 + char.codePointAt(0)) >>> 0, 0);
   const hue = seed % 360;
   const name = player.name.normalize('NFKC').trim();
@@ -120,14 +129,31 @@ function avatar(player) {
       <path fill="hsl(${hue} 57% 38%)" d="M0 45 45 0h19v10L10 64H0zm38 19 26-26v18l-8 8z"/>
       <path fill="none" stroke="#fff" opacity=".24" d="M4 4h12m44 56H48"/>
       <text x="32" y="42" fill="#fff" font-family="Segoe UI, sans-serif" font-size="27" font-weight="600" text-anchor="middle">${safe(initials)}</text>
-    </svg>${file ? `<img class="avatar-image" src="${safe(file)}" referrerpolicy="no-referrer" alt="">` : ''}
+    </svg>${file ? `<img class="avatar-image" src="${safe(file)}" data-avatar-sources="${safe(sources.join(' '))}" referrerpolicy="no-referrer" alt="">` : ''}
   </span>`;
   avatarMarkup.set(player, markup);
   return markup;
 }
 
 el('match-graphic').addEventListener('error', event => {
-  if (event.target instanceof HTMLImageElement && event.target.classList.contains('avatar-image')) event.target.hidden = true;
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || !image.dataset.avatarSources) return;
+  const sources = image.dataset.avatarSources.split(' ');
+  const next = (image.avatarSource ?? 0) + 1;
+  if (sources[next]) {
+    image.avatarSource = next;
+    image.src = sources[next];
+    return;
+  }
+  image.hidden = true;
+  setTimeout(() => {
+    if (!image.isConnected) return;
+    image.avatarSource = 0;
+    image.src = sources[0];
+  }, 60_000);
+}, true);
+el('match-graphic').addEventListener('load', event => {
+  if (event.target instanceof HTMLImageElement && event.target.dataset.avatarSources) event.target.hidden = false;
 }, true);
 
 function weapon(id, cls) {
@@ -255,13 +281,26 @@ function updateClock() {
   el('clock').classList.toggle('is-urgent', seconds != null && seconds <= 10 && !el('clock').classList.contains('is-bomb'));
 }
 
+function paintSeriesMarks(marks, target, wins) {
+  if (marks.children.length !== target) {
+    marks.replaceChildren(...Array.from({ length: target }, () => document.createElement('i')));
+  }
+  for (const [i, mark] of [...marks.children].entries()) mark.classList.toggle('won', i < wins);
+}
+
+const seriesTeams = document.createElement('div');
+seriesTeams.className = 'series-teams';
+seriesTeams.hidden = true;
+document.querySelector('.match-events').prepend(seriesTeams);
+
 function paintScoreboard(state, match, game) {
   const options = match && state.broadcast?.[match.id];
-  const ctTeam = match?.teams.find(team => team.id === (game ? game.ctTeam : options?.ctTeam));
+  const ctTeam = match?.teams.find(team => team?.id === (game ? game.ctTeam : options?.ctTeam));
   const tTeam = ctTeam && match.teams.find(team => team !== ctTeam);
   const recorded = match && (match.score || Array.isArray(options?.mapResults));
-  const seriesScore = recorded ? recordedSeriesScore(match, options) : null;
-  const legacyWinners = recorded ? [] : Object.values(options?.mapWinners ?? {});
+  const seriesScore = recorded ? recordedSeriesScore(match, options) : state.seriesScores?.[match?.id];
+  const legacyWinners = seriesScore ? [] : Object.values(options?.mapWinners ?? {});
+  const winsFor = team => seriesScore?.[match.teams.indexOf(team)] ?? legacyWinners.filter(id => id === team.id).length;
   const target = match ? (match.bestOf + 1) / 2 : 0;
   const namesBySide = {};
   for (const [side, team] of [['ct', ctTeam], ['t', tTeam]]) {
@@ -276,14 +315,26 @@ function paintScoreboard(state, match, game) {
     setText(score, value(next));
 
     const marks = el(`${side}-wins`);
-    marks.hidden = !target;
-    marks.dataset.mapped = Boolean(team);
-    const wins = team ? seriesScore?.[match.teams.indexOf(team)] ?? legacyWinners.filter(id => id === team.id).length : 0;
-    marks.setAttribute('aria-label', team ? `BO${match.bestOf} · выиграно карт ${wins} из ${target}` : 'Счёт по картам ожидает привязки сторон');
-    if (marks.children.length !== target) {
-      marks.replaceChildren(...Array.from({ length: target }, () => document.createElement('i')));
+    marks.hidden = !target || !team;
+    if (!marks.hidden) {
+      const wins = winsFor(team);
+      marks.setAttribute('aria-label', `BO${match.bestOf} · выиграно карт ${wins} из ${target}`);
+      paintSeriesMarks(marks, target, wins);
     }
-    for (const [i, mark] of [...marks.children].entries()) mark.classList.toggle('won', i < wins);
+  }
+  const showTeamScore = !ctTeam && target && match.teams.every(Boolean);
+  seriesTeams.hidden = !showTeamScore;
+  if (showTeamScore) {
+    setMarkup(seriesTeams, match.teams.map(team => {
+      const tag = safe(team.tag);
+      return `<span class="series-team"><b title="${tag}">${tag}</b><span class="round-marks"></span></span>`;
+    }).join(''));
+    for (const [i, team] of match.teams.entries()) {
+      const marks = seriesTeams.children[i].lastElementChild;
+      const wins = winsFor(team);
+      marks.setAttribute('aria-label', `${team.tag} · выиграно карт ${wins} из ${target}`);
+      paintSeriesMarks(marks, target, wins);
+    }
   }
   return namesBySide;
 }
@@ -294,6 +345,7 @@ function showRadar(mapId, game) {
   if (!overview) {
     el('radar-marks').replaceChildren();
     radarNodes.clear();
+    radarContext = null;
     return;
   }
   const players = game.players ?? [];
@@ -307,8 +359,12 @@ function showRadar(mapId, game) {
     el('radar-marks').replaceChildren();
     radarNodes.clear();
   }
+  const now = performance.now();
+  const reset = radarContext?.matchId !== game.matchId || game.round < radarContext?.round ||
+    (radarContext?.phase !== game.phase && ['freezetime', 'warmup', 'halftime', 'intermission'].includes(game.phase));
+  radarContext = { matchId: game.matchId, round: game.round, phase: game.phase };
   const visible = new Set();
-  function place(key, position, css, markup = '') {
+  function place(key, position, css, markup = '', heading = undefined) {
     if (!position || position.some(value => !Number.isFinite(value) || value < 0 || value > 1)) return null;
     visible.add(key);
     let node = radarNodes.get(key);
@@ -318,9 +374,33 @@ function showRadar(mapId, game) {
       radarNodes.set(key, node);
     }
     if (node.className !== css) node.className = css;
-    node.style.setProperty('--radar-x', position[0].toFixed(4));
-    node.style.setProperty('--radar-y', position[1].toFixed(4));
     setMarkup(node, markup);
+    const [x, y] = position.map(value => Math.round(value * 10000) / 10000);
+    const previous = node.radarSample;
+    if (heading !== undefined) {
+      const unwrapped = heading == null || previous?.heading == null || reset ? heading
+        : previous.heading + ((heading - previous.heading) % 360 + 540) % 360 - 180;
+      const angle = unwrapped == null ? null : Math.round(unwrapped * 10) / 10;
+      if (!previous || reset || x !== previous.x || y !== previous.y || angle !== previous.heading) {
+        // Leave room for telemetry and polling jitter so markers keep moving between packets.
+        const elapsed = now - previous?.at;
+        let interval = previous?.interval ?? 120;
+        if (!reset && elapsed >= 65 && elapsed <= 330) {
+          interval += (elapsed - interval) * (elapsed > interval ? .65 : .28);
+        }
+        const jumped = !previous || reset || Math.hypot(x - previous.x, y - previous.y) > .065;
+        node.style.setProperty('--radar-motion', `${jumped ? 0 : Math.min(300, Math.round(interval + 26))}ms`);
+        node.radarSample = { x, y, heading: angle, at: now, interval };
+      }
+      const arrow = node.firstElementChild;
+      arrow.hidden = angle == null;
+      if (angle != null && arrow.radarHeading !== angle) {
+        arrow.style.setProperty('--heading', `${angle}deg`);
+        arrow.radarHeading = angle;
+      }
+    }
+    if (x !== previous?.x) node.style.setProperty('--radar-x', x);
+    if (y !== previous?.y) node.style.setProperty('--radar-y', y);
     return node;
   }
   place('A', overview.a, 'radar-site', 'A');
@@ -331,13 +411,9 @@ function showRadar(mapId, game) {
   for (const player of players) {
     if (!player.position || !player.health || !onLevel(player.position)) continue;
     const angle = player.forward ? 90 + Math.atan2(-player.forward[1], player.forward[0]) * 180 / Math.PI : null;
-    const marker = place(`player:${playerKey(player)}`, coordinate(player.position),
+    place(`player:${playerKey(player)}`, coordinate(player.position),
       `radar-dot side-${player.side.toLowerCase()}${player.observed ? ' is-observed' : ''}`,
-      `<span class="radar-heading"></span><span class="radar-face">${avatar(player)}</span>`);
-    if (marker) {
-      marker.firstElementChild.hidden = angle == null;
-      if (angle != null) marker.firstElementChild.style.setProperty('--heading', `${angle.toFixed(1)}deg`);
-    }
+      `<span class="radar-heading"></span><span class="radar-face">${avatar(player)}</span>`, angle);
   }
   const bomb = game.bomb;
   if (bomb?.position && ['planted', 'defusing', 'dropped'].includes(bomb.state) && onLevel(bomb.position)) {
@@ -367,6 +443,7 @@ function paintEvents(now = Date.now()) {
     const reason = roundReasons[roundResult.reason];
     setText(el('round-result-label'), `Победа в раунде ${roundResult.round}${reason ? ` · ${reason}` : ''}`);
     setText(el('round-result-name'), roundResult.names.join(' / '));
+    paintRoundMvp(roundPanel, roundResult.mvp, roundResult.id);
   }
   roundPanel.classList.toggle('is-leaving', roundLeft > 0 && roundLeft <= exitMs);
 

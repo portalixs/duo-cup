@@ -315,7 +315,7 @@ const publicFiles = new Map([
   ['/', 'index.html'], ['/obs', 'obs.html'], ['/control', 'control.html'],
   ...['index.html', 'obs.html', 'control.html', 'event.json', 'style.css', 'control.css', 'obs.css', 'hud.css', 'hud-results.css', 'obs-transitions.css', 'art.svg',
     'arena.webp', 'archivo-black.woff2', 'archivo-black-license.txt',
-    'app.mjs', 'model.mjs', 'obs.mjs', 'hud-results.mjs', 'obs-transitions.mjs', 'control.mjs'].map(file => [`/${file}`, file]),
+    'app.mjs', 'model.mjs', 'obs.mjs', 'hud-results.mjs', 'obs-transitions.mjs', 'hud-mvp.mjs', 'hud-mvp.css', 'control.mjs'].map(file => [`/${file}`, file]),
 ]);
 const mime = { html: 'text/html', css: 'text/css', mjs: 'text/javascript', json: 'application/json', svg: 'image/svg+xml',
   woff2: 'font/woff2', txt: 'text/plain; charset=utf-8',

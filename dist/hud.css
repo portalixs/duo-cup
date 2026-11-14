@@ -75,13 +75,20 @@
   background: var(--radar-color, var(--blue));
   box-shadow: 0 1px 3px #000a;
   font: 650 calc(var(--u) * 12)/1 var(--display);
-  transition: transform 115ms linear, border-color 180ms ease, box-shadow 180ms ease;
+  transition: transform var(--radar-motion, 0ms) linear, border-color 180ms ease, box-shadow 180ms ease;
 }
+.radar-dot:not(.radar-bomb), .radar-heading { will-change: transform; }
 .radar-dot.side-t { --radar-color: var(--red); }
 .radar-face { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
 .player-avatar { position: relative; display: block; width: 100%; height: 100%; overflow: hidden; border-radius: inherit; background: #182739; }
 .avatar-image, .avatar-fallback { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
-.radar-heading { position: absolute; z-index: -1; inset: calc(var(--u) * -4.5); transform: rotate(var(--heading, 0deg)); }
+.radar-heading {
+  position: absolute;
+  z-index: -1;
+  inset: calc(var(--u) * -4.5);
+  transform: rotate(var(--heading, 0deg));
+  transition: transform var(--radar-motion, 0ms) linear;
+}
 .radar-heading::before {
   position: absolute;
   top: calc(var(--u) * -2);
@@ -183,8 +190,22 @@
 .round-marks { position: absolute; top: calc(var(--u) * 5); display: flex; justify-content: center; gap: calc(var(--u) * 3); width: 26%; }
 .round-marks-ct { left: 0; --map-win: #87a8ff; }
 .round-marks-t { right: 0; --map-win: #ff8ba6; }
-.round-marks i { width: calc(var(--u) * 7); height: calc(var(--u) * 7); border: 1px solid #b1c3e39c; background: #adbad031; }
-.round-marks i.won { border-color: var(--map-win); background: var(--map-win); box-shadow: 0 0 calc(var(--u) * 3) var(--map-win); animation: map-win 550ms var(--curve) both; }
+.round-marks i { width: calc(var(--u) * 7); height: calc(var(--u) * 7); background: #adbad056; }
+.round-marks i.won { background: var(--map-win); animation: map-win 550ms var(--curve) both; }
+
+.series-teams {
+  --map-win: #eaf2ff;
+  display: flex;
+  max-width: 100%;
+  gap: calc(var(--u) * 12);
+  padding: calc(var(--u) * 3) calc(var(--u) * 8);
+  background: var(--panel);
+  font-size: calc(var(--u) * 10);
+  line-height: 1.15;
+}
+.series-team { display: flex; align-items: center; min-width: 0; gap: calc(var(--u) * 4); }
+.series-team b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.series-team .round-marks { position: static; flex: none; width: auto; }
 
 .match-events {
   position: absolute;

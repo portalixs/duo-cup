@@ -14,6 +14,8 @@ const obsTemplates = [
   ['DUO CUP · CS2 4K', 'DUO-CUP-4K.json'],
 ];
 const requiredScenes = ['01 · Ожидание и перерыв', '02 · Матч CS2', '03 · Ожидание матча', '04 · Смена карты', '05 · Повтор'];
+const stingerName = 'DUO CUP · Диагональная волна';
+const stingerFile = 'duo-cup-wave.webm';
 
 function isFile(path) {
   try { return statSync(path, { throwIfNoEntry: false })?.isFile() ?? false; }
@@ -219,6 +221,29 @@ async function obsRunning() {
   }
 }
 
+function prepareStinger(collection, path) {
+  const transitions = collection.transitions ?? [];
+  const existing = transitions.find(transition => transition.name === stingerName);
+  const settings = { ...existing?.settings, path, tp_type: 0, transition_point: 425, hw_decode: false, audio_fade_style: 1 };
+  if (existing && Object.keys(settings).every(key => existing.settings?.[key] === settings[key])) return false;
+  if (existing) existing.settings = settings;
+  else {
+    collection.transitions = [...transitions, { name: stingerName, id: 'obs_stinger_transition', settings }];
+    collection.current_transition = stingerName;
+  }
+  return true;
+}
+
+async function writeObsFile(path, data) {
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, data, { flag: 'wx' });
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
+}
+
 async function prepareObsCollections({ sourceDir, configDir }) {
   const destination = sceneFolder(configDir);
   const templates = await Promise.all(obsTemplates.map(async ([name, filename]) => {
@@ -230,11 +255,32 @@ async function prepareObsCollections({ sourceDir, configDir }) {
   const existing = await findObsCollections(configDir);
   const existingNames = new Set(existing.map(collection => collection.name.toLowerCase()));
   const running = await obsRunning();
+  const stingerPath = join(destination, '..', '..', 'duo-cup', stingerFile);
+  if (!running) {
+    const stingerData = await readFile(join(sourceDir, stingerFile));
+    const installed = await previousFile(stingerPath);
+    if (!installed?.equals(stingerData)) {
+      await mkdir(dirname(stingerPath), { recursive: true });
+      await writeObsFile(stingerPath, stingerData);
+    }
+  }
   const collections = [];
   for (const template of templates) {
     const installed = existing.find(collection => collection.templateName === template.name && collection.name === template.name)
       ?? existing.find(collection => collection.templateName === template.name);
-    if (installed) collections.push({ ...installed, installed: false });
+    if (installed) {
+      if (!running) {
+        const data = await readFile(installed.path, 'utf8');
+        const collection = JSON.parse(data.replace(/^\uFEFF/, ''));
+        if (prepareStinger(collection, stingerPath)) {
+          const backup = `${installed.path}.before-duo-cup-wave.bak`;
+          try { await writeFile(backup, data, { flag: 'wx' }); }
+          catch (error) { if (error.code !== 'EEXIST') throw error; }
+          await writeObsFile(installed.path, `${JSON.stringify(collection, null, 2)}\n`);
+        }
+      }
+      collections.push({ ...installed, installed: false });
+    }
     else if (!running) {
       await mkdir(destination, { recursive: true });
       let suffix = 1;
@@ -243,6 +289,7 @@ async function prepareObsCollections({ sourceDir, configDir }) {
         name = `${template.name} (Комментаторы${suffix > 1 ? ` ${suffix}` : ''})`;
         suffix++;
       }
+      prepareStinger(template.collection, stingerPath);
       suffix = 1;
       for (;;) {
         const filename = suffix === 1 ? template.filename : template.filename.replace(/\.json$/, `-${suffix}.json`);
