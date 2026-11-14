@@ -339,6 +339,13 @@ async function openCommentator(overlay) {
   await page.loadFile(join(__dirname, 'commentator.html'));
   return {
     show() { if (page.isMinimized()) page.restore(); page.show(); page.focus(); },
+    async resumeObserver() {
+      await actions.startService();
+      if (!service.ownsProcess()) return;
+      if (!overlay.isEnabled()) overlay.toggle();
+      const buffer = await requestObs('GetReplayBufferStatus');
+      if (buffer.outputActive) await actions.replayEnable();
+    },
     async shutdown() {
       await service.stop().catch(() => {});
       service.kill();

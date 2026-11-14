@@ -32,7 +32,7 @@ await build({
         filter: [
           'dist/**/*', '!dist/server/**', 'obs/DUO-CUP*.json', 'obs/duocup_match_hud.cfg', 'obs/duo-cup-wave.webm',
           'server.mjs', 'hud-data.mjs', 'obs-replay.mjs', 'obs-websocket.mjs', 'observer-bridge.mjs',
-          'replay-selection.mjs', 'steam-avatars.mjs', 'tournament-control.mjs',
+          'replay-selection.mjs', 'replay-trim.mjs', 'steam-avatars.mjs', 'tournament-control.mjs',
         ],
       },
       { from: resolve(desktop, 'installer/obs-install.ps1'), to: 'duo-cup/obs-install.ps1' },

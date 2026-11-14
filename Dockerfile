@@ -7,7 +7,7 @@ ENV HOST=0.0.0.0 \
     TOURNAMENT_DATA_DIR=/app/runtime
 
 COPY server.mjs hud-data.mjs steam-avatars.mjs tournament-control.mjs observer-bridge.mjs ./
-COPY obs-replay.mjs obs-websocket.mjs replay-selection.mjs ./
+COPY obs-replay.mjs obs-websocket.mjs replay-selection.mjs replay-trim.mjs ./
 COPY dist/ ./dist/
 COPY obs/ ./obs/
 

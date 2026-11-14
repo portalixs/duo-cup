@@ -16,7 +16,7 @@ const players = [
 const game = { matchId: 'G1.1', mapId: 'de_mirage', phase: 'live', round: 1, players };
 const frag = id => ({ id, at: Date.now(), name: 'Платон', side: 'CT', slot: 1, count: 1, headshots: 0 });
 
-function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520 } = {}) {
+function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520, preparedDuration } = {}) {
   const calls = [];
   let scene = matchScene;
   let emit;
@@ -24,6 +24,7 @@ function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520 } = {}) {
   let cursor = 0;
   let mediaState = 'OBS_MEDIA_STATE_STOPPED';
   let savedCount = 0;
+  let loadedDuration = mediaDuration;
   let updatedAt = Date.now();
 
   function connect(_config, onEvent) {
@@ -49,8 +50,9 @@ function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520 } = {}) {
           speed = fields.inputSettings.speed_percent ?? 100;
           cursor = 0;
           mediaState = 'OBS_MEDIA_STATE_PLAYING';
+          loadedDuration = fields.inputSettings.local_file === 'trimmed.mp4' ? preparedDuration() : mediaDuration;
           return {};
-        case 'GetMediaInputStatus': return { mediaState, mediaDuration, mediaCursor: Math.floor(cursor) };
+        case 'GetMediaInputStatus': return { mediaState, mediaDuration: loadedDuration, mediaCursor: Math.floor(cursor) };
         case 'SetMediaInputCursor':
           cursor = seekToKeyframe;
           return {};
@@ -91,6 +93,7 @@ test('shows the last frag in a multi-kill at 50% after preparing the keyframe se
   const { calls, connect } = fakeObs();
   const replay = createObsReplay({}, connect);
   await replay.setEnabled(true);
+  assert.doesNotThrow(() => replay.ingest(null));
   replay.ingest(game);
   const first = frag('first');
   replay.ingest({ ...game, frags: [first], players: players.map(player => player.slot === 3 ? { ...player, health: 0 } : player) });
@@ -125,6 +128,8 @@ test('shows the last frag in a multi-kill at 50% after preparing the keyframe se
   const returned = calls.find(call => call.type === 'SetCurrentProgramScene' && call.fields.sceneName === matchScene);
   assert.ok(returned, 'Replay returns to the match scene');
   assert.ok(returned.cursor > finalFragCursor + 490, 'The return occurs after the final frag and its visible aftermath');
+  assert.doesNotThrow(() => replay.ingest(null));
+  assert.equal(replay.status().enabled, true);
 });
 
 test('keeps the match on air when the capture is too short to include the kill window', async () => {
@@ -138,4 +143,24 @@ test('keeps the match on air when the capture is too short to include the kill w
   assert.equal(replay.current(), null);
   assert.ok(calls.some(call => call.type === 'GetMediaInputStatus'));
   assert.ok(!calls.some(call => call.type === 'SetCurrentProgramScene'));
+});
+
+test('plays an accurately trimmed clip immediately even with a distant keyframe', async () => {
+  let bounds;
+  let cleaned = false;
+  const { calls, connect } = fakeObs({ seekToKeyframe: 4000, preparedDuration: () => bounds.duration });
+  const replay = createObsReplay({}, connect, async (file, window) => {
+    assert.equal(file, 'clip-1.mkv');
+    bounds = window;
+    return { path: 'trimmed.mp4', async cleanup() { cleaned = true; } };
+  });
+  await replay.setEnabled(true);
+  replay.ingest(game);
+  finishRound(replay, [frag('trimmed-final')]);
+  assert.ok(await until(() => replay.status().lastAttempt?.outcome === 'playing', 2200));
+  assert.equal(bounds.duration, 1490);
+  assert.ok(bounds.start > 7400 && bounds.start < 8150);
+  assert.ok(!calls.some(call => call.type === 'SetMediaInputCursor'));
+  await replay.setEnabled(false);
+  assert.ok(await until(() => cleaned));
 });

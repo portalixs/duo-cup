@@ -106,6 +106,10 @@ async function start() {
   if (!hudOnly) {
     const { openCommentator } = require('./commentator-main.cjs');
     commentator = await openCommentator({ isEnabled: () => enabled, toggle: toggleOverlay });
+    if (process.argv.includes('--resume-observer')) {
+      try { await commentator.resumeObserver(); }
+      catch (error) { console.error(error); }
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { emptyState, resolveMatches } from './dist/model.mjs';
@@ -9,6 +9,7 @@ import { createSteamAvatarLookup } from './steam-avatars.mjs';
 import { error, updateMatch } from './tournament-control.mjs';
 import { observerUpdate, organizerView, spectatorView } from './observer-bridge.mjs';
 import { createObsReplay } from './obs-replay.mjs';
+import { createReplayTrimmer } from './replay-trim.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const dist = join(root, 'dist');
@@ -108,7 +109,10 @@ if (!isServer) {
           || (settings.password != null && typeof settings.password !== 'string')) {
         throw new Error('Проверьте порт и пароль в runtime/obs.json');
       }
-      obsReplay = createObsReplay(settings);
+      const localTool = join(runtime, 'tools', 'ffmpeg.exe');
+      const executable = process.env.DUOCUP_REPLAY_FFMPEG || (existsSync(localTool) ? localTool : null);
+      const trimClip = executable && createReplayTrimmer({ executable, directory: join(runtime, 'replay-preview') });
+      obsReplay = createObsReplay(settings, undefined, trimClip);
     }
   } catch (cause) { console.warn(`Повтор OBS: ${cause.message}`); }
 }
@@ -293,7 +297,9 @@ function receiveGame(payload) {
     clockEnd: isFinal ? null : hud.clockEnd,
   };
   const plannedMap = options?.maps?.[options.mapResults?.length ?? 0];
-  obsReplay?.ingest(matchId && (!plannedMap || mapId === plannedMap || isFinal) && !knifeInProgress ? game : null);
+  // Confirmation advances the organizer's map pointer independently of the CS2 session.
+  const belongsToSeries = !plannedMap || mapId === plannedMap || options?.mapResults?.some(result => result.mapId === mapId);
+  obsReplay?.ingest(matchId && (belongsToSeries || isFinal) && !knifeInProgress ? game : null);
 }
 
 async function applyLocalGraphics(body) {
