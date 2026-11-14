@@ -71,11 +71,17 @@ async function openCommentator(overlay) {
       const next = { connected: false, bufferActive: false, running, installed: Boolean(obsExe), scenesReady };
       if (running) {
         try {
-          const [buffer, scene] = await Promise.all([requestObs('GetReplayBufferStatus'), requestObs('GetCurrentProgramScene')]);
+          const scene = await requestObs('GetCurrentProgramScene');
           next.connected = true;
-          next.bufferActive = buffer.outputActive;
           next.currentScene = scene.currentProgramSceneName ?? scene.sceneName;
         } catch { next.error = 'В OBS включите WebSocket и проверьте порт и пароль.'; }
+        if (next.connected) {
+          // Older OBS versions reject this request when Replay Buffer is disabled in the profile.
+          const buffer = await requestObs('GetReplayBufferStatus').catch(() => null);
+          next.bufferAvailable = Boolean(buffer);
+          next.bufferActive = buffer?.outputActive === true;
+          if (!buffer) next.error = 'В OBS включите буфер повтора в разделе «Настройки → Вывод».';
+        }
       }
       obsState = next;
       lastProbe = Date.now();

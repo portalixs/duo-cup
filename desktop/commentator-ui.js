@@ -119,7 +119,8 @@ function render() {
     : cs2.configured ? 'Конфиги установлены. Ожидаем матч.' : 'Установите конфиги в разделе «Настройка».';
 
   status('obs-tone', obs.connected ? 'Подключено' : obs.installed ? 'Ожидание' : 'Установка', obs.connected ? 'good' : 'idle');
-  element('obs-state').textContent = obs.connected ? (obs.bufferActive ? 'Буфер повтора работает.' : 'WebSocket подключён. Буфер остановлен.')
+  element('obs-state').textContent = obs.connected ? (obs.bufferActive ? 'Буфер повтора работает.'
+    : obs.bufferAvailable === false ? 'WebSocket подключён. Буфер повтора выключен в настройках OBS.' : 'WebSocket подключён. Буфер остановлен.')
     : obs.installed ? (obs.running ? 'Проверьте WebSocket и пароль.' : 'Откройте OBS и включите WebSocket.') : 'Установите OBS Studio для захвата игры.';
   const obsButton = element('obs-launch');
   obsButton.dataset.action = obs.installed ? 'launchObs' : 'installObs';
@@ -169,7 +170,8 @@ function render() {
           startService: !service.running && !service.occupied, stopService: service.owned, openControl: true,
           launchCs2: true, launchObs: obs.installed, installObs: true, toggleHud: hud.running || service.running,
         replayEnable: appControl && obs.connected && obs.bufferActive, replayDisable: appControl,
-          startReplayBuffer: obs.connected && !obs.bufferActive, knife: appControl && Boolean(service.active) && mayKnife && !obs.replayPlaying,
+          startReplayBuffer: obs.connected && obs.bufferAvailable !== false && !obs.bufferActive,
+          knife: appControl && Boolean(service.active) && mayKnife && !obs.replayPlaying,
         installCs2: appControl && hasCs2Path && !changed,
         setupObsScenes: obs.installed && obs.running !== true && !obs.connected, openObsScenes: true,
         openLogs: true, openRuntime: true, openObsGuide: true,
