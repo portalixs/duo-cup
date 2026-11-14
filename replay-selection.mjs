@@ -2,6 +2,7 @@ const livePhases = new Set(['live', 'bomb', 'defuse']);
 const endPhases = new Set(['over', 'halftime', 'intermission', 'gameover']);
 const multiKillWindow = 4500;
 const maxGsiGap = 15_000;
+const lateFragWindow = 800;
 
 function observerKey(player) {
   return player ? `${player.side}/${player.slot ?? ''}/${player.name}` : null;
@@ -34,10 +35,29 @@ function selectHighlights(candidates, result, players) {
   }).sort((a, b) => b.priority - a.priority || b.at - a.at);
 }
 
+function scoreResult(previous, game, round, now) {
+  if (![previous?.ct, previous?.t, game.ct, game.t].every(Number.isSafeInteger)
+      || previous.ct + previous.t !== round.number - 1 || game.ct + game.t !== round.number) return null;
+  const ctWin = game.ct === previous.ct + 1 && game.t === previous.t;
+  const tWin = game.t === previous.t + 1 && game.ct === previous.ct;
+  if (!ctWin && !tWin) return null;
+  return { id: `${round.matchId}/${round.mapId}/${round.number}/${now}`, at: now, side: ctWin ? 'CT' : 'T' };
+}
+
+function announceRound(round, players) {
+  const { id, at, side } = round.result;
+  return {
+    id, at, side, round: round.number, matchId: round.matchId, mapId: round.mapId,
+    candidates: selectHighlights(round.candidates, round.result, players),
+  };
+}
+
 export function createReplaySelector() {
   let round = null;
   let previousPlayers = [];
   let previousAt = null;
+  let previousScore = null;
+  let previousRound = null;
   let previousObserver = null;
   let pov = 0;
 
@@ -45,6 +65,8 @@ export function createReplaySelector() {
     round = null;
     previousPlayers = [];
     previousAt = null;
+    previousScore = null;
+    previousRound = null;
     previousObserver = null;
     pov = 0;
   }
@@ -63,8 +85,13 @@ export function createReplaySelector() {
     const stale = previousAt != null && (now - previousAt > maxGsiGap || now < previousAt);
     if (round && (stale || matchId !== round.matchId || mapId !== round.mapId || (live && number < round.number))) reset();
 
+    // A score increase can be the first visible indication that the prior round ended.
+    if (round && !round.result && (live || phase === 'freezetime') && number === round.number + 1 && previousRound === round.number) {
+      round.result = scoreResult(previousScore, game, round, now);
+      if (round.result && round.candidates.length) response.roundEnd = announceRound(round, previousPlayers);
+    }
     if (live && Number.isSafeInteger(number) && number > 0 && round?.number !== number) {
-      round = { matchId, mapId, number, began: now, ended: false, frags: [], seen: new Set(), candidates: [] };
+      round = { matchId, mapId, number, began: now, result: null, frags: [], seen: new Set(), candidates: [] };
     }
 
     const observer = observerKey(players.find(player => player.observed));
@@ -73,7 +100,13 @@ export function createReplaySelector() {
     previousPlayers = players;
     previousObserver = observer;
     previousAt = now;
-    if (!round || round.ended || (!live && !ended) || (number != null && number !== round.number)) return response;
+    previousScore = { ct: game.ct, t: game.t };
+    previousRound = game.round;
+    if (!round || (!live && !ended) || (number != null && number !== round.number)) return response;
+    if (round.result && (!ended || now - round.result.at > lateFragWindow)) return response;
+
+    const newResult = !round.result && ended && (roundResult?.side === 'CT' || roundResult?.side === 'T');
+    if (newResult) round.result = { ...roundResult, at: Number.isFinite(roundResult.at) ? roundResult.at : now };
 
     for (const frag of frags) {
       if (!frag.id || round.seen.has(frag.id) || !Number.isFinite(frag.at) || frag.at > now || frag.at < round.began ||
@@ -97,13 +130,8 @@ export function createReplaySelector() {
     }
     if (response.capture) round.candidates.push(response.capture);
 
-    if (ended && roundResult && round.candidates.length && (roundResult.side === 'CT' || roundResult.side === 'T')) {
-      round.ended = true;
-      const result = { ...roundResult, at: Number.isFinite(roundResult.at) ? roundResult.at : now };
-      response.roundEnd = {
-        id: result.id, at: result.at, round: round.number, matchId, mapId,
-        side: result.side, candidates: selectHighlights(round.candidates, result, players),
-      };
+    if (round.result && round.candidates.length && (newResult || response.capture)) {
+      response.roundEnd = announceRound(round, players);
     }
     return response;
   }

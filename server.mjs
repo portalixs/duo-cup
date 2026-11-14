@@ -110,7 +110,9 @@ if (!isServer) {
         throw new Error('Проверьте порт и пароль в runtime/obs.json');
       }
       const localTool = join(runtime, 'tools', 'ffmpeg.exe');
-      const executable = process.env.DUOCUP_REPLAY_FFMPEG || (existsSync(localTool) ? localTool : null);
+      const bundledTool = join(root, 'tools', 'ffmpeg.exe');
+      const executable = process.env.DUOCUP_REPLAY_FFMPEG
+        || [bundledTool, localTool].find(path => existsSync(path));
       const trimClip = executable && createReplayTrimmer({ executable, directory: join(runtime, 'replay-preview') });
       obsReplay = createObsReplay(settings, undefined, trimClip);
     }

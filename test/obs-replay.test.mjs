@@ -16,7 +16,7 @@ const players = [
 const game = { matchId: 'G1.1', mapId: 'de_mirage', phase: 'live', round: 1, players };
 const frag = id => ({ id, at: Date.now(), name: 'Платон', side: 'CT', slot: 1, count: 1, headshots: 0 });
 
-function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520, preparedDuration } = {}) {
+function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520, preparedDuration, skipSave } = {}) {
   const calls = [];
   let scene = matchScene;
   let emit;
@@ -43,7 +43,7 @@ function fakeObs({ mediaDuration = duration, seekToKeyframe = 7520, preparedDura
         case 'GetCurrentSceneTransition': return { transitionDuration: 0 };
         case 'SaveReplayBuffer': {
           const savedReplayPath = `clip-${++savedCount}.mkv`;
-          setTimeout(() => emit('ReplayBufferSaved', { savedReplayPath }), 20);
+          if (savedCount !== skipSave) setTimeout(() => emit('ReplayBufferSaved', { savedReplayPath }), 20);
           return {};
         }
         case 'SetInputSettings':
@@ -163,4 +163,25 @@ test('plays an accurately trimmed clip immediately even with a distant keyframe'
   assert.ok(!calls.some(call => call.type === 'SetMediaInputCursor'));
   await replay.setEnabled(false);
   assert.ok(await until(() => cleaned));
+});
+
+test('tries the earlier saved frag when the final frag has no recording', async () => {
+  let bounds;
+  const { calls, connect } = fakeObs({ skipSave: 2, preparedDuration: () => bounds.duration });
+  const replay = createObsReplay({}, connect, async (file, window) => {
+    assert.equal(file, 'clip-1.mkv');
+    bounds = window;
+    return { path: 'trimmed.mp4', async cleanup() {} };
+  });
+  await replay.setEnabled(true);
+  replay.ingest(game);
+  const first = frag('recorded');
+  replay.ingest({ ...game, frags: [first] });
+  assert.ok(await until(() => replay.status().lastAttempt?.outcome === 'saved', 1500));
+  finishRound(replay, [first, frag('missing')]);
+  assert.ok(await until(() => replay.status().lastAttempt?.outcome === 'playing', 4500));
+  assert.equal(calls.filter(call => call.type === 'SaveReplayBuffer').length, 2);
+  assert.equal(calls.filter(call => call.fields?.sceneName === replayScene).length, 1);
+  await replay.setEnabled(false);
+  assert.ok(await until(() => !replay.current()));
 });

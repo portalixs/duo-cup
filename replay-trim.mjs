@@ -18,7 +18,7 @@ export function createReplayTrimmer({ executable, directory }) {
     try {
       await run(executable, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-n',
         '-ss', seconds(start), '-i', inputPath, '-t', seconds(duration), '-map', '0:v:0',
-        '-an', '-sn', '-dn', '-vf', 'setpts=PTS-STARTPTS', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-an', '-sn', '-dn', '-vf', 'setpts=PTS-STARTPTS', '-c:v', 'mpeg4', '-q:v', '3', '-g', '30',
         '-threads', '4', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path],
       { timeout: 3500, windowsHide: true, maxBuffer: 64 * 1024 });
       return { path, cleanup };

@@ -196,7 +196,8 @@ function render() {
   replayButton.setAttribute('aria-pressed', String(Boolean(obs.replayEnabled)));
   replayButton.textContent = obs.replayEnabled ? 'Выключить' : 'Включить';
   element('replay-state').textContent = obs.replayPlaying ? 'Повтор в эфире.' : obs.error || (!hasReplayScene ? 'Откройте коллекцию DUO CUP со сценой «05 · Повтор».'
-    : obs.replayEnabled ? 'Лучший фраг раунда будет показан автоматически.'
+    : obs.replayEnabled && obs.currentScene && obs.currentScene !== scenes.get('sceneMatch') ? 'Для автоповторов выберите сцену «Матч CS2».'
+      : obs.replayEnabled ? 'После раунда с записанным фрагом пульт покажет повтор.'
       : obs.bufferActive ? 'Буфер готов к автоматическим повторам.' : 'Запустите буфер повтора перед матчем.');
 
   element('clear-publish-label').hidden = !settings.hasPublishKey;
@@ -225,12 +226,12 @@ function render() {
         setupFirstRun: !service.occupied && !externalService && !service.restartRequired && !changed,
         startService: !service.running && !service.occupied, stopService: service.owned, openControl: true,
         launchCs2: true, launchObs: obs.installed, installObs: true, toggleHud: hud.running || service.running,
-        replayEnable: appControl && obs.connected && obs.bufferActive && hasReplayScene, replayDisable: appControl,
+        replayEnable: appControl && obs.connected && obs.bufferAvailable !== false && hasReplayScene, replayDisable: appControl,
           startReplayBuffer: obs.connected && obs.bufferAvailable !== false && !obs.bufferActive,
           knife: appControl && Boolean(service.active) && mayKnife && !obs.replayPlaying,
         installCs2: appControl && hasCs2Path && !changed,
         setupObsScenes: obs.installed && obs.running !== true && !obs.connected, openObsScenes: true,
-        openLogs: true, openRuntime: true, openObsGuide: true,
+        openLogs: true, openRuntime: true, openObsGuide: true, openUpdates: true,
       }[action];
     }
     button.disabled = Boolean(pending) || !permitted;

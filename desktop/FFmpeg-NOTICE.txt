@@ -1,0 +1,19 @@
+DUO CUP uses FFmpeg as a separate executable for video trimming.
+The bundled FFmpeg is supplied unmodified, without warranty, under the GNU
+Lesser General Public License, version 3 or later. It uses shared libraries
+that can be replaced individually. See FFmpeg-LICENSE.txt for the upstream
+license text and FFmpeg-GPLv3.txt for the terms incorporated by reference.
+
+FFmpeg and its libraries are copyright the FFmpeg developers and their
+respective contributors. The binary build is published by FFmpeg-Builds
+(formerly BtbN/FFmpeg-Builds).
+
+Exact Windows x64 LGPL shared release and upstream checksums:
+https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/tag/autobuild-2026-11-01-12-49
+
+FFmpeg source tree used for this build:
+https://github.com/FFmpeg/FFmpeg/tree/d7643a0fe3f4f65516c302eba045ba884faed015
+https://github.com/FFmpeg/FFmpeg/archive/d7643a0fe3f4f65516c302eba045ba884faed015.tar.gz
+
+Build configuration and scripts, including dependency versions and sources:
+https://github.com/FFmpeg-Builds/FFmpeg-Builds/tree/5ece62897c650b863c1ddda7b6964845344aef2d

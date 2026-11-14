@@ -14,6 +14,7 @@ const minimumLeadMs = 530;
 const visibleTailMs = 550;
 const freezeOverlapMs = 6500;
 const statusPollMs = 40;
+const roundSettleMs = 850;
 const mediaAction = action => `OBS_WEBSOCKET_MEDIA_INPUT_ACTION_${action}`;
 
 function clipWindow(duration, candidate, capture, returnedAt) {
@@ -71,7 +72,7 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
   }
 
   async function save(candidate, version) {
-    if (!enabled || version !== generation || showing?.switched || candidate.at <= returnedAt + 400 || Date.now() - candidate.at > 1100) return null;
+    if (!enabled || version !== generation || showing?.switched || candidate.at <= returnedAt + 400 || Date.now() - candidate.at > 2300) return null;
     if (!(await request('GetReplayBufferStatus')).outputActive) {
       recordAttempt(candidate.round, 'buffer-stopped');
       return null;
@@ -83,7 +84,7 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
     // Allow the kill and its aftermath through the capture and encoder before saving.
     await wait(Math.max(0, candidate.at + saveTailMs - Date.now()));
     if (!enabled || version !== generation || showing?.switched || !sameMap(latest, candidate)
-      || Date.now() - candidate.at > 1450 || await scene() !== matchScene) return null;
+      || Date.now() - candidate.at > 2350 || await scene() !== matchScene) return null;
     const at = Date.now();
     let timer;
     try {
@@ -102,7 +103,7 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
   }
 
   function capture(candidate) {
-    if (showing || Date.now() < nextConnectionAttempt) return;
+    if (showing?.switched || Date.now() < nextConnectionAttempt) return;
     if (captures.size >= 24) captures.delete(captures.keys().next().value);
     const version = generation;
     const pending = saveQueue.then(() => save(candidate, version)).catch(error => { warn(error); return null; });
@@ -124,7 +125,7 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
 
   function airUntil(round) {
     if (latest.phase !== 'freezetime' || latest.round <= round.round) return Infinity;
-    return Math.min(freezeAt + freezeOverlapMs, Number.isFinite(latest.clockEnd) ? latest.clockEnd : Infinity);
+    return Number.isFinite(latest.clockEnd) ? latest.clockEnd : freezeAt + freezeOverlapMs;
   }
 
   function preloading(run) {
@@ -233,8 +234,6 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
 
   async function play(round) {
     if (showing || !canAir(round) || Date.now() < nextConnectionAttempt) return;
-    const matches = round.candidates.map(candidate => [candidate, captures.get(candidate.id)]).filter(([, clip]) => clip);
-    if (!matches.length) return;
     const run = { round, switched: false, started: false, cancelled: false, transitionMs: 0 };
     showing = run;
     try {
@@ -248,9 +247,14 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
         && transition.transitionSettings?.tp_type === 0 ? Math.min(1500, transition.transitionSettings.transition_point) : stinger ? 425 : 0;
       run.transitionMs = stinger ? Math.max(870, cutMs + 450) : Math.min(1000, transition.transitionDuration ?? 0);
 
-      for (const [candidate, pending] of matches) {
+      await wait(Math.max(0, round.at + roundSettleMs - Date.now()));
+      const attempted = new Set();
+      while (preloading(run)) {
+        const candidate = round.candidates.find(item => !attempted.has(item.id) && captures.has(item.id));
+        if (!candidate) return;
+        attempted.add(candidate.id);
         await releaseTrimmed(run);
-        const capture = await pending;
+        const capture = await captures.get(candidate.id);
         if (!preloading(run) || await scene() !== matchScene) return;
         if (!capture) continue;
         run.prepared = true;
@@ -304,6 +308,11 @@ export function createObsReplay(config, connect = createObsConnection, trimClip 
     const { capture: candidate, roundEnd } = selector.ingest(game);
     if (candidate) capture(candidate);
     if (roundEnd?.candidates.some(candidate => captures.has(candidate.id))) {
+      if (awaitingReplay?.id === roundEnd.id) {
+        awaitingReplay.candidates = roundEnd.candidates;
+        return;
+      }
+      if (showing) return;
       awaitingReplay = roundEnd;
       void play(roundEnd).catch(warn).finally(() => {
         if (awaitingReplay === roundEnd) awaitingReplay = null;

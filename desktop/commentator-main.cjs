@@ -285,9 +285,21 @@ async function openCommentator(overlay) {
     },
     openRuntime: () => revealPath(runtime), openLogs: () => revealPath(service.logs),
     openObsScenes: () => revealPath(obsDir),
+    async openUpdates() { await shell.openExternal('https://github.com/portalixs/duo-cup/releases/latest'); return {}; },
     async openObsGuide() { await shell.openExternal('https://github.com/portalixs/duo-cup/blob/main/README.md#автоповтор-в-конце-раунда'); return {}; },
     async startReplayBuffer() { await requestObs('StartReplayBuffer'); lastProbe = 0; return { message: 'Буфер повтора запущен.' }; },
-    async replayEnable() { await service.requestControl({ action: 'obs-replay', enabled: true }); return { message: 'Автоповтор включён.' }; },
+    async replayEnable() {
+      if (!(await requestObs('GetReplayBufferStatus')).outputActive) {
+        await requestObs('StartReplayBuffer');
+        for (let attempt = 0; attempt < 10; attempt++) {
+          if ((await requestObs('GetReplayBufferStatus')).outputActive) break;
+          await new Promise(resolve => setTimeout(resolve, 140));
+        }
+      }
+      await service.requestControl({ action: 'obs-replay', enabled: true });
+      lastProbe = 0;
+      return { message: 'Автоповтор включён.' };
+    },
     async replayDisable() { await service.requestControl({ action: 'obs-replay', enabled: false }); return { message: 'Автоповтор выключен.' }; },
     async knife() { await service.requestControl({ action: 'obs-knife' }); return { message: 'Плашка ножевого отправлена в HUD.' }; },
   };

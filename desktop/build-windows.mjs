@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Arch, build, Platform } from 'electron-builder';
+import { prepareWindowsFfmpeg } from './ffmpeg-package.mjs';
 
 if (process.platform !== 'win32' || process.arch !== 'x64') {
   throw new Error('Для сборки установщика используйте Windows x64 и Node.js x64.');
@@ -11,6 +12,7 @@ const desktop = dirname(fileURLToPath(import.meta.url));
 const project = resolve(desktop, '..');
 const require = createRequire(import.meta.url);
 const { version: electronVersion } = require('electron/package.json');
+const ffmpeg = await prepareWindowsFfmpeg(resolve(project, 'runtime/ffmpeg-package'));
 
 await build({
   projectDir: desktop,
@@ -36,6 +38,10 @@ await build({
         ],
       },
       { from: resolve(desktop, 'installer/obs-install.ps1'), to: 'duo-cup/obs-install.ps1' },
+      { from: ffmpeg.bin, to: 'duo-cup/tools', filter: ffmpeg.binaries },
+      { from: ffmpeg.license, to: 'duo-cup/tools/FFmpeg-LICENSE.txt' },
+      { from: ffmpeg.gpl, to: 'duo-cup/tools/FFmpeg-GPLv3.txt' },
+      { from: resolve(desktop, 'FFmpeg-NOTICE.txt'), to: 'duo-cup/tools/FFmpeg-NOTICE.txt' },
     ],
     win: { executableName: 'DUO-CUP-Commentator', icon: 'installer/icon.ico', signExecutable: false },
     nsis: {
